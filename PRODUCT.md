@@ -1,6 +1,7 @@
 # Bankside — Product scope
 
-**Wave 1 build:** 6 Sep 2026 (UTC+1)  
+**Wave 2 build:** 6 Sep 2026 (UTC+1)  
+**Wave 1:** shipped earlier same day  
 **Design:** LOCKED craft baseline (Pepper PASS) — see DESIGN.md. Extend tokens / PostRow / covers / Logo / mobile tabs / IBM Plex / brand+signal. Do not reinvent.
 
 ## Positioning
@@ -15,10 +16,10 @@
 | Rule | Detail |
 | --- | --- |
 | Venue groups | Only venue owners create venue groups — via venue register (atomically creates official group + owner membership). |
-| System global groups | Carp fishing, Match fishing, Pleasure fishing (seed). Room to add more globals later (admin/seed). |
+| System global groups | Carp, Match, Pleasure, Predator, Specimen hunting (seed). Add more via seed — see WAVE2.md. |
 | Venue register | Owner registers venue – own official group + owner backend. |
 | Noticeboard | Official + pinned posts for rules, codes, updates (`official` / `pinned` flags). |
-| Monetisation (later) | Brands / reach / small fishery fee — stub/admin flags OK; **no payments** this wave. |
+| Monetisation stub | `Venue.featured` boolean → Featured badge on Discover. **No payments**. |
 
 ## Wave 1 — done
 
@@ -31,16 +32,23 @@
 - [x] Discover polish — search groups by name
 - [x] Seed demos kept working; README + STATUS updated
 
+
+## Wave 2 — done
+
+- [x] DMs: 1:1 threads; list + send; entry from Me / Messages / profile
+- [x] Join-request queue for venue groups alongside invite links
+- [x] Owner noticeboard templates (Rules / Gate codes / Updates)
+- [x] Two more system globals (Predator, Specimen) + docs for adding globals
+- [x] Notifications: mark as read + unread badge on Me / header avatar
+- [x] Featured venue flag + Discover badge (no payments)
+
 ## Later (out of this wave)
 
 - Booking
 - Payments / Stripe
-- DMs
 - Push / mobile native
 - three.js
 - VPS deploy
-- Join-request approval queue (invite links cover private-ish sharing for now)
-- Brand reach / fishery fee billing (admin flags only if needed)
 
 ## Success checks
 
