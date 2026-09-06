@@ -1,12 +1,15 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
-import { MembershipRole, Role } from "@/generated/prisma/client";
+import { JoinRequestStatus, MembershipRole, Role } from "@/generated/prisma/client";
 import {
+  postNoticeTemplate,
   regenerateInvite,
   removeMember,
+  resolveJoinRequest,
   toggleOfficial,
   togglePin,
+  toggleVenueFeatured,
   updateVenue,
 } from "@/app/actions";
 import { db } from "@/lib/db";
@@ -34,6 +37,11 @@ export default async function VenueAdmin({
           memberships: {
             include: { user: { select: { id: true, name: true, email: true } } },
             orderBy: { joinedAt: "asc" },
+          },
+          joinRequests: {
+            where: { status: JoinRequestStatus.PENDING },
+            include: { user: { select: { id: true, name: true, email: true } } },
+            orderBy: { createdAt: "asc" },
           },
           posts: {
             include: { author: { select: { name: true } } },
@@ -72,7 +80,10 @@ export default async function VenueAdmin({
           <div className="flex flex-wrap items-end gap-4">
             <Avatar name={venue.name} size={72} />
             <div className="min-w-0 flex-1 pb-1">
-              <Badge variant="venue">Venue</Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="venue">Venue</Badge>
+                {venue.featured ? <Badge variant="featured">Featured</Badge> : null}
+              </div>
               <h1 className="mt-1 text-title text-ink sm:text-display">{venue.name}</h1>
               <p className="mt-1 text-ui text-muted">
                 {venue.location} · {pluralize(venue.group?._count.memberships ?? 0, "member")} ·{" "}
@@ -103,6 +114,82 @@ export default async function VenueAdmin({
             </>
           ) : null}
         </div>
+
+
+        {user.role === Role.ADMIN ? (
+          <section className="border border-border bg-surface px-4 py-4">
+            <h2 className="text-title text-ink">Admin · Featured</h2>
+            <p className="mt-1 text-ui text-muted">
+              Monetisation stub only — no payments. Featured venues show a badge on Discover.
+            </p>
+            <form action={toggleVenueFeatured} className="mt-3">
+              <input type="hidden" name="venueSlug" value={venue.slug} />
+              <button type="submit" className="btn-secondary">
+                {venue.featured ? "Remove featured" : "Mark featured"}
+              </button>
+            </form>
+          </section>
+        ) : null}
+
+        {venue.group ? (
+          <section className="border border-border bg-surface px-4 py-4">
+            <h2 className="text-title text-ink">Noticeboard templates</h2>
+            <p className="mt-1 text-ui text-muted">
+              Quick official + pinned posts for Rules, Gate codes, or Updates.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(["rules", "gate", "update"] as const).map((template) => (
+                <form action={postNoticeTemplate} key={template}>
+                  <input type="hidden" name="groupId" value={venue.group!.id} />
+                  <input type="hidden" name="venueSlug" value={venue.slug} />
+                  <input type="hidden" name="template" value={template} />
+                  <button type="submit" className="btn-secondary">
+                    {template === "rules" ? "Post Rules" : template === "gate" ? "Post Gate codes" : "Post Updates"}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {(venue.group?.joinRequests?.length ?? 0) > 0 ? (
+          <section className="border border-border bg-surface">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-title text-ink">Join requests</h2>
+              <p className="mt-1 text-ui text-muted">Approve or deny alongside invite links.</p>
+            </div>
+            <ul>
+              {venue.group!.joinRequests.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+                >
+                  <Avatar name={r.user.name} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-ui font-semibold text-ink">{r.user.name}</p>
+                    <p className="text-meta text-muted">{r.user.email}</p>
+                  </div>
+                  <form action={resolveJoinRequest}>
+                    <input type="hidden" name="requestId" value={r.id} />
+                    <input type="hidden" name="venueSlug" value={venue.slug} />
+                    <input type="hidden" name="decision" value="approve" />
+                    <button type="submit" className="btn !min-h-10">
+                      Approve
+                    </button>
+                  </form>
+                  <form action={resolveJoinRequest}>
+                    <input type="hidden" name="requestId" value={r.id} />
+                    <input type="hidden" name="venueSlug" value={venue.slug} />
+                    <input type="hidden" name="decision" value="deny" />
+                    <button type="submit" className="btn-secondary !min-h-10">
+                      Deny
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {inviteUrl ? (
           <section className="border border-border bg-surface px-4 py-4">

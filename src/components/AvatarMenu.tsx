@@ -8,9 +8,11 @@ import { Avatar } from "@/components/ui";
 export function AvatarMenu({
   name,
   role,
+  unreadCount = 0,
 }: {
   name: string;
   role: string;
+  unreadCount?: number;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -56,7 +58,12 @@ export function AvatarMenu({
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
       >
-        <Avatar name={name} size={32} />
+        <span className="relative">
+          <Avatar name={name} size={32} />
+          {unreadCount > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-signal ring-2 ring-surface" />
+          ) : null}
+        </span>
         <span className="sr-only sm:not-sr-only sm:text-ui sm:font-semibold sm:text-ink">{name}</span>
         <span aria-hidden="true" className="hidden text-muted sm:inline">
           ▾
@@ -82,12 +89,20 @@ export function AvatarMenu({
             Me
           </Link>
           <Link
+            href="/me/messages"
+            role="menuitem"
+            className="btn-ghost w-full justify-start !px-2"
+            onClick={() => setOpen(false)}
+          >
+            Messages
+          </Link>
+          <Link
             href="/me/notifications"
             role="menuitem"
             className="btn-ghost w-full justify-start !px-2"
             onClick={() => setOpen(false)}
           >
-            Notifications
+            Notifications{unreadCount ? ` (${unreadCount})` : ""}
           </Link>
           <form action={logout} className="mt-1">
             <button type="submit" role="menuitem" className="btn-ghost w-full justify-start !px-2">

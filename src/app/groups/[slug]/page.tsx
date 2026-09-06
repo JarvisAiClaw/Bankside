@@ -49,6 +49,12 @@ export default async function GroupPage({
   const canModerate =
     user?.role === Role.ADMIN || (!!membership && membership.role !== MembershipRole.MEMBER);
 
+  const pendingJoinRequest = user
+    ? !!(await db.joinRequest.findFirst({
+        where: { groupId: group.id, userId: user.id, status: "PENDING" },
+      }))
+    : false;
+
   return (
     <div>
       <div className="shell pt-4">
@@ -60,6 +66,7 @@ export default async function GroupPage({
         user={user}
         membership={membership}
         activeTab={activeTab}
+        pendingJoinRequest={pendingJoinRequest}
       />
 
       <div className="shell max-w-3xl py-4" role="tabpanel">

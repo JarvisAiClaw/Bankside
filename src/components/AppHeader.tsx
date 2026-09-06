@@ -7,7 +7,7 @@ import { AvatarMenu } from "@/components/AvatarMenu";
 
 type NavUser = { name: string; role: string } | null;
 
-export function AppHeader({ user }: { user: NavUser }) {
+export function AppHeader({ user, unreadCount = 0 }: { user: NavUser; unreadCount?: number }) {
   const pathname = usePathname();
   const isOwner = user?.role === "VENUE_OWNER" || user?.role === "ADMIN";
   const links = user
@@ -49,9 +49,23 @@ export function AppHeader({ user }: { user: NavUser }) {
               </Link>
             );
           })}
-          <span className="ml-2 w-40" aria-hidden="true" />
           {user ? (
-            <AvatarMenu name={user.name} role={user.role} />
+            <Link
+              href="/me/notifications"
+              className="relative ml-1 inline-flex min-h-10 items-center px-2 text-ui font-semibold text-ink hover:text-brand"
+              aria-label={unreadCount ? `${unreadCount} unread notifications` : "Notifications"}
+            >
+              Alerts
+              {unreadCount > 0 ? (
+                <span className="ml-1 rounded-md bg-signal px-1.5 py-0.5 text-meta font-semibold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
+          <span className="ml-2 w-8" aria-hidden="true" />
+          {user ? (
+            <AvatarMenu name={user.name} role={user.role} unreadCount={unreadCount} />
           ) : (
             <Link href="/register" className="btn !min-h-10 !px-3">
               Join free
@@ -59,9 +73,18 @@ export function AppHeader({ user }: { user: NavUser }) {
           )}
         </nav>
 
-        <div className="md:hidden">
+        <div className="flex items-center gap-2 md:hidden">
+          {user && unreadCount > 0 ? (
+            <Link
+              href="/me/notifications"
+              className="rounded-md bg-signal px-2 py-0.5 text-meta font-semibold text-white"
+              aria-label={`${unreadCount} unread`}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </Link>
+          ) : null}
           {user ? (
-            <AvatarMenu name={user.name} role={user.role} />
+            <AvatarMenu name={user.name} role={user.role} unreadCount={unreadCount} />
           ) : (
             <Link href="/register" className="btn !min-h-10 !px-3">
               Join

@@ -28,6 +28,16 @@ enum MembershipRole {
 enum NotificationType {
   COMMENT
   MEMBER_JOIN
+  JOIN_REQUEST
+  JOIN_APPROVED
+  JOIN_DENIED
+  DM
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
 }
 
 model User {
@@ -44,6 +54,10 @@ model User {
   reactions      Reaction[]
   notifications  Notification[] @relation("NotificationRecipient")
   actedNotices   Notification[] @relation("NotificationActor")
+  joinRequests   JoinRequest[]
+  dmThreadsA     DmThread[]     @relation("DmUserA")
+  dmThreadsB     DmThread[]     @relation("DmUserB")
+  dmMessages     DmMessage[]
 }
 
 model Venue {
@@ -52,6 +66,7 @@ model Venue {
   slug        String   @unique
   description String
   location    String
+  featured    Boolean  @default(false)
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   group       Group?
@@ -70,6 +85,7 @@ model Group {
   venue        Venue?       @relation(fields: [venueId], references: [id], onDelete: Cascade)
   memberships  Membership[]
   posts        Post[]
+  joinRequests JoinRequest[]
   createdAt    DateTime     @default(now())
 }
 
@@ -136,4 +152,46 @@ model Notification {
   user      User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor     User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
   createdAt DateTime         @default(now())
+}
+
+model JoinRequest {
+  id         String            @id @default(cuid())
+  groupId    String
+  userId     String
+  status     JoinRequestStatus @default(PENDING)
+  note       String?
+  createdAt  DateTime          @default(now())
+  resolvedAt DateTime?
+  group      Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId, status])
+}
+
+model DmThread {
+  id        String      @id @default(cuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  userA     User        @relation("DmUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User        @relation("DmUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages  DmMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model DmMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  thread    DmThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
 }

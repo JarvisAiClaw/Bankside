@@ -52,7 +52,7 @@ export function Badge({
   variant,
   children,
 }: {
-  variant: "official" | "pinned" | "community" | "venue" | "role";
+  variant: "official" | "pinned" | "community" | "venue" | "role" | "featured";
   children: React.ReactNode;
 }) {
   const styles = {
@@ -61,6 +61,7 @@ export function Badge({
     community: "bg-brand-subtle text-brand border border-brand/20",
     venue: "bg-brand text-white",
     role: "bg-brand-subtle text-brand",
+    featured: "bg-signal text-white",
   }[variant];
   return <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-meta font-semibold ${styles}`}>{children}</span>;
 }

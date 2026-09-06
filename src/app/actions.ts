@@ -1,6 +1,6 @@
 "use server";
 import bcrypt from "bcryptjs";
-import { GroupType, MembershipRole, NotificationType, Role } from "@/generated/prisma/client";
+import { GroupType, JoinRequestStatus, MembershipRole, NotificationType, Role } from "@/generated/prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -131,29 +131,72 @@ export async function joinGroup(form: FormData) {
   const userId = await requireUser(),
     groupId = value(form, "groupId"),
     slug = value(form, "slug");
+  const group = await db.group.findUniqueOrThrow({ where: { id: groupId } });
   const existing = await db.membership.findUnique({
     where: { userId_groupId: { userId, groupId } },
   });
-  if (!existing) {
-    await db.membership.create({ data: { userId, groupId } });
-    const [actor, owners] = await Promise.all([
-      db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } }),
-      db.membership.findMany({
-        where: { groupId, role: { in: [MembershipRole.OWNER, MembershipRole.MODERATOR] } },
-        select: { userId: true },
-      }),
-    ]);
-    const group = await db.group.findUnique({ where: { id: groupId }, select: { name: true, slug: true } });
+  if (existing) {
+    revalidatePath(`/groups/${slug}`);
+    return;
+  }
+
+  // Venue groups: join-request queue. Globals: open join.
+  if (group.type === GroupType.VENUE) {
+    const pending = await db.joinRequest.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+    });
+    if (pending?.status === JoinRequestStatus.PENDING) {
+      revalidatePath(`/groups/${slug}`);
+      return;
+    }
+    if (pending) {
+      await db.joinRequest.update({
+        where: { id: pending.id },
+        data: { status: JoinRequestStatus.PENDING, resolvedAt: null, note: null },
+      });
+    } else {
+      await db.joinRequest.create({ data: { groupId, userId } });
+    }
+    const actor = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+    const owners = await db.membership.findMany({
+      where: { groupId, role: { in: [MembershipRole.OWNER, MembershipRole.MODERATOR] } },
+      select: { userId: true },
+    });
+    const venue = group.venueId
+      ? await db.venue.findUnique({ where: { id: group.venueId }, select: { slug: true } })
+      : null;
     for (const o of owners) {
       await notify({
         userId: o.userId,
-        type: NotificationType.MEMBER_JOIN,
-        message: `${actor.name} joined ${group?.name ?? "your group"}`,
-        link: `/groups/${group?.slug ?? slug}?tab=members`,
+        type: NotificationType.JOIN_REQUEST,
+        message: `${actor.name} requested to join ${group.name}`,
+        link: venue ? `/owner/venues/${venue.slug}` : `/groups/${group.slug}`,
         actorId: userId,
         groupId,
       });
     }
+    revalidatePath(`/groups/${slug}`);
+    revalidatePath("/me/notifications");
+    return;
+  }
+
+  await db.membership.create({ data: { userId, groupId } });
+  const [actor, owners] = await Promise.all([
+    db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } }),
+    db.membership.findMany({
+      where: { groupId, role: { in: [MembershipRole.OWNER, MembershipRole.MODERATOR] } },
+      select: { userId: true },
+    }),
+  ]);
+  for (const o of owners) {
+    await notify({
+      userId: o.userId,
+      type: NotificationType.MEMBER_JOIN,
+      message: `${actor.name} joined ${group.name}`,
+      link: `/groups/${group.slug}?tab=members`,
+      actorId: userId,
+      groupId,
+    });
   }
   revalidatePath(`/groups/${slug}`);
   revalidatePath("/me/notifications");
@@ -398,4 +441,164 @@ export async function markNotificationsRead() {
   await db.notification.updateMany({ where: { userId, read: false }, data: { read: true } });
   revalidatePath("/me/notifications");
   revalidatePath("/me");
+  revalidatePath("/feed");
+}
+
+
+export async function markNotificationRead(form: FormData) {
+  const userId = await requireUser();
+  const id = value(form, "notificationId");
+  await db.notification.updateMany({ where: { id, userId }, data: { read: true } });
+  revalidatePath("/me/notifications");
+  revalidatePath("/me");
+  revalidatePath("/feed");
+}
+
+export async function resolveJoinRequest(form: FormData) {
+  const userId = await requireUser();
+  const requestId = value(form, "requestId");
+  const decision = value(form, "decision"); // approve | deny
+  const venueSlug = value(form, "venueSlug");
+  const req = await db.joinRequest.findUniqueOrThrow({
+    where: { id: requestId },
+    include: { group: true, user: { select: { id: true, name: true } } },
+  });
+  if (!(await canModerateGroup(userId, req.groupId)))
+    withError(`/owner/venues/${venueSlug}`, "You do not have permission to manage join requests.");
+  if (req.status !== JoinRequestStatus.PENDING)
+    withError(`/owner/venues/${venueSlug}`, "This request was already resolved.");
+
+  if (decision === "approve") {
+    await db.$transaction(async (tx) => {
+      await tx.joinRequest.update({
+        where: { id: req.id },
+        data: { status: JoinRequestStatus.APPROVED, resolvedAt: new Date() },
+      });
+      await tx.membership.upsert({
+        where: { userId_groupId: { userId: req.userId, groupId: req.groupId } },
+        update: {},
+        create: { userId: req.userId, groupId: req.groupId },
+      });
+    });
+    await notify({
+      userId: req.userId,
+      type: NotificationType.JOIN_APPROVED,
+      message: `Your request to join ${req.group.name} was approved`,
+      link: `/groups/${req.group.slug}`,
+      actorId: userId,
+      groupId: req.groupId,
+    });
+  } else {
+    await db.joinRequest.update({
+      where: { id: req.id },
+      data: { status: JoinRequestStatus.DENIED, resolvedAt: new Date() },
+    });
+    await notify({
+      userId: req.userId,
+      type: NotificationType.JOIN_DENIED,
+      message: `Your request to join ${req.group.name} was declined`,
+      link: `/groups/${req.group.slug}`,
+      actorId: userId,
+      groupId: req.groupId,
+    });
+  }
+  revalidatePath(`/owner/venues/${venueSlug}`);
+  revalidatePath(`/groups/${req.group.slug}`);
+  revalidatePath("/me/notifications");
+}
+
+export async function postNoticeTemplate(form: FormData) {
+  const userId = await requireUser();
+  const groupId = value(form, "groupId");
+  const venueSlug = value(form, "venueSlug");
+  const template = value(form, "template"); // rules | gate | update
+  const custom = value(form, "body");
+  if (!(await canModerateGroup(userId, groupId)))
+    withError(`/owner/venues/${venueSlug}`, "You do not have permission to post notices.");
+  const group = await db.group.findUniqueOrThrow({ where: { id: groupId } });
+
+  const templates: Record<string, string> = {
+    rules:
+      "Fishery rules\n\n• Keep to your swim and respect other anglers\n• Take litter home\n• No loud music after dusk\n• Follow all site signage",
+    gate:
+      "Gate / access codes\n\nMain gate code: ____\nCar park barrier: ____\nPlease shut gates behind you. Codes may rotate — check here before each visit.",
+    update:
+      "Venue update\n\n" + (custom || "Quick update from the fishery team — more details soon."),
+  };
+  const body =
+    template === "update" && custom
+      ? custom
+      : templates[template] || custom;
+  if (!body) withError(`/owner/venues/${venueSlug}`, "Choose a template or write an update.");
+
+  await db.post.create({
+    data: {
+      body,
+      groupId,
+      authorId: userId,
+      official: true,
+      pinned: template === "rules" || template === "gate",
+    },
+  });
+  revalidatePath(`/owner/venues/${venueSlug}`);
+  revalidatePath(`/groups/${group.slug}`);
+  revalidatePath("/feed");
+}
+
+export async function toggleVenueFeatured(form: FormData) {
+  const userId = await requireUser();
+  const venueSlug = value(form, "venueSlug");
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const venue = await db.venue.findUniqueOrThrow({ where: { slug: venueSlug } });
+  // Stub monetisation: owners can toggle for demo; admins always can
+  if (venue.ownerId !== userId && user.role !== Role.ADMIN)
+    withError(`/owner/venues/${venueSlug}`, "You do not own this venue.");
+  await db.venue.update({ where: { id: venue.id }, data: { featured: !venue.featured } });
+  revalidatePath(`/owner/venues/${venueSlug}`);
+  revalidatePath("/discover");
+  revalidatePath("/owner");
+}
+
+function dmPair(a: string, b: string) {
+  return a < b ? ([a, b] as const) : ([b, a] as const);
+}
+
+export async function startDm(form: FormData) {
+  const userId = await requireUser();
+  const otherId = value(form, "userId");
+  if (!otherId || otherId === userId) withError("/me/messages", "Choose someone to message.");
+  const other = await db.user.findUnique({ where: { id: otherId } });
+  if (!other) withError("/me/messages", "That user could not be found.");
+  const [userAId, userBId] = dmPair(userId, otherId);
+  const thread = await db.dmThread.upsert({
+    where: { userAId_userBId: { userAId, userBId } },
+    update: {},
+    create: { userAId, userBId },
+  });
+  redirect(`/me/messages/${thread.id}`);
+}
+
+export async function sendDm(form: FormData) {
+  const userId = await requireUser();
+  const threadId = value(form, "threadId");
+  const body = value(form, "body");
+  if (!body || body.length > 2000)
+    withError(`/me/messages/${threadId}`, "Messages must be between 1 and 2,000 characters.");
+  const thread = await db.dmThread.findUniqueOrThrow({ where: { id: threadId } });
+  if (thread.userAId !== userId && thread.userBId !== userId)
+    withError("/me/messages", "You are not part of this conversation.");
+  await db.dmMessage.create({ data: { threadId, senderId: userId, body } });
+  await db.dmThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
+  const recipientId = thread.userAId === userId ? thread.userBId : thread.userAId;
+  const actor = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+  await notify({
+    userId: recipientId,
+    type: NotificationType.DM,
+    message: `${actor.name} sent you a message`,
+    link: `/me/messages/${threadId}`,
+    actorId: userId,
+  });
+  revalidatePath(`/me/messages/${threadId}`);
+  revalidatePath("/me/messages");
+  revalidatePath("/me/notifications");
 }

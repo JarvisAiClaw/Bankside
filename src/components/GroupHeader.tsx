@@ -13,6 +13,7 @@ export function GroupHeader({
   user,
   membership,
   activeTab,
+  pendingJoinRequest,
 }: {
   group: {
     id: string;
@@ -21,18 +22,20 @@ export function GroupHeader({
     description: string;
     type: string;
     coverUrl?: string | null;
-    venue?: { location: string; description?: string } | null;
+    venue?: { location: string; description?: string; featured?: boolean } | null;
   };
   memberCount: number;
   user: { id: string } | null;
   membership: { role: string } | null | undefined;
   activeTab: GroupTab;
+  pendingJoinRequest?: boolean;
 }) {
   const tabs: { id: GroupTab; label: string }[] = [
     { id: "posts", label: "Posts" },
     { id: "about", label: "About" },
     { id: "members", label: "Members" },
   ];
+  const isVenue = group.type === "VENUE";
 
   return (
     <header className="bg-surface">
@@ -50,9 +53,10 @@ export function GroupHeader({
           <Avatar name={group.name} size={72} />
           <div className="min-w-0 flex-1 pb-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={group.type === "VENUE" ? "venue" : "community"}>
-                {group.type === "VENUE" ? "Venue" : "Community"}
+              <Badge variant={isVenue ? "venue" : "community"}>
+                {isVenue ? "Venue" : "Community"}
               </Badge>
+              {group.venue?.featured ? <Badge variant="featured">Featured</Badge> : null}
             </div>
             <h1 className="mt-1 text-title text-ink sm:text-display">{group.name}</h1>
             <p className="mt-1 text-ui text-muted">
@@ -60,7 +64,7 @@ export function GroupHeader({
               {pluralize(memberCount, "member")}
             </p>
           </div>
-          <div className="pb-1">
+          <div className="flex flex-wrap gap-2 pb-1">
             {user ? (
               membership ? (
                 <form action={leaveGroup}>
@@ -74,12 +78,16 @@ export function GroupHeader({
                     {membership.role === MembershipRole.MEMBER ? "Leave" : "Admin"}
                   </button>
                 </form>
+              ) : pendingJoinRequest ? (
+                <button className="btn-secondary" type="button" disabled>
+                  Request pending
+                </button>
               ) : (
                 <form action={joinGroup}>
                   <input type="hidden" name="groupId" value={group.id} />
                   <input type="hidden" name="slug" value={group.slug} />
                   <button className="btn" type="submit">
-                    Join
+                    {isVenue ? "Request to join" : "Join"}
                   </button>
                 </form>
               )

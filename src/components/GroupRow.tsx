@@ -11,7 +11,7 @@ export function GroupRow({
     description: string;
     type: string;
     _count: { memberships: number; posts: number };
-    venue?: { location: string } | null;
+    venue?: { location: string; featured?: boolean } | null;
   };
 }) {
   return (
@@ -30,6 +30,7 @@ export function GroupRow({
           <Badge variant={group.type === "VENUE" ? "venue" : "community"}>
             {group.type === "VENUE" ? "Venue" : "Community"}
           </Badge>
+          {group.venue?.featured ? <Badge variant="featured">Featured</Badge> : null}
           <h2 className="truncate text-ui font-semibold text-ink">{group.name}</h2>
         </div>
         {group.venue ? <p className="mt-0.5 text-meta text-muted">{group.venue.location}</p> : null}

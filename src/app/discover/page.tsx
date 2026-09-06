@@ -28,7 +28,7 @@ export default async function Discover({
     },
     orderBy: [{ type: "asc" }, { name: "asc" }],
     include: {
-      venue: { select: { location: true } },
+      venue: { select: { location: true, featured: true } },
       _count: { select: { memberships: true, posts: true } },
     },
   });

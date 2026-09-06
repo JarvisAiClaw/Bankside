@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Serif } from "next/font/google";
 import { branding } from "@/lib/branding";
 import { getCurrentUser } from "@/lib/current-user";
+import { db } from "@/lib/db";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import "./globals.css";
@@ -28,6 +29,9 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await getCurrentUser();
   const isOwner = user?.role === "VENUE_OWNER" || user?.role === "ADMIN";
+  const unreadCount = user
+    ? await db.notification.count({ where: { userId: user.id, read: false } })
+    : 0;
 
   return (
     <html
@@ -46,7 +50,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       }
     >
       <body className={`min-h-screen font-sans antialiased ${user ? "has-mobile-tabs" : ""}`}>
-        <AppHeader user={user ? { name: user.name, role: user.role } : null} />
+        <AppHeader
+          user={user ? { name: user.name, role: user.role } : null}
+          unreadCount={unreadCount}
+        />
         <main>{children}</main>
         {user ? <MobileTabBar isOwner={!!isOwner} /> : null}
         {!user ? (

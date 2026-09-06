@@ -9,10 +9,13 @@ const DEMO_PASS = "password123";
 async function main() {
   const passwordHash = await bcrypt.hash(DEMO_PASS, 12);
 
+  // System global groups — add more here (seed upserts by slug). Admin flag stub: featured venues below.
   const groups = [
     ["Carp fishing", "carp-fishing", "For carp anglers: catches, tactics and waters.", "/covers/carp-fishing.jpg"],
     ["Match fishing", "match-fishing", "Match results, events and competitive angling chat.", "/covers/match-fishing.jpg"],
     ["Pleasure fishing", "pleasure-fishing", "Relaxed fishing, local tips and time by the water.", null],
+    ["Predator fishing", "predator-fishing", "Pike, perch and zander — lures, deadbaits and winter tactics.", null],
+    ["Specimen hunting", "specimen-hunting", "Big fish targets, tactics and venue reports.", null],
   ] as const;
 
   for (const [name, slug, description, coverUrl] of groups) {
@@ -61,6 +64,8 @@ async function main() {
   }
 
   let venue = await prisma.venue.findUnique({ where: { slug: "willow-lakes" } });
+  // ensure featured stub for demo discover badge
+
   if (!venue) {
     venue = await prisma.$transaction(async (tx) => {
       const v = await tx.venue.create({
@@ -70,6 +75,7 @@ async function main() {
           location: "Kent, UK",
           description: "A friendly mixed fishery with carp and silverfish lakes.",
           ownerId: owner.id,
+          featured: true,
         },
       });
       const g = await tx.group.create({
@@ -102,6 +108,7 @@ async function main() {
       where: { slug: "venue-willow-lakes" },
       data: { coverUrl: "/covers/willow-lakes.jpg", inviteToken: "demo-willow-invite" },
     });
+    await prisma.venue.update({ where: { slug: "willow-lakes" }, data: { featured: true } });
     const willow = await prisma.group.findUniqueOrThrow({ where: { slug: "venue-willow-lakes" } });
     await prisma.membership.upsert({
       where: { userId_groupId: { userId: angler.id, groupId: willow.id } },
@@ -114,6 +121,8 @@ async function main() {
       await prisma.post.update({ where: { id: pinned.id }, data: { imageUrl: "/uploads/catch-3.jpg" } });
     }
   }
+
+  await prisma.venue.update({ where: { id: venue!.id }, data: { featured: true } });
 
   // Media-first demo posts
   const mediaPosts = [
@@ -227,7 +236,31 @@ async function main() {
     }
   }
 
-  console.log("Seeded groups, covers, demo users, media posts, likes, comments");
+
+  // Wave 2 demos
+  const [aId, bId] = angler.id < mate.id ? [angler.id, mate.id] : [mate.id, angler.id];
+  const dm = await prisma.dmThread.upsert({
+    where: { userAId_userBId: { userAId: aId, userBId: bId } },
+    update: {},
+    create: { userAId: aId, userBId: bId },
+  });
+  if (!(await prisma.dmMessage.findFirst({ where: { threadId: dm.id } }))) {
+    await prisma.dmMessage.create({
+      data: { threadId: dm.id, senderId: mate.id, body: "Fancy a social at Willow this weekend?" },
+    });
+  }
+  if (willowGroup) {
+    await prisma.joinRequest.upsert({
+      where: { groupId_userId: { groupId: willowGroup.id, userId: mate.id } },
+      update: { status: "PENDING", resolvedAt: null },
+      create: { groupId: willowGroup.id, userId: mate.id, status: "PENDING" },
+    });
+    await prisma.membership.deleteMany({
+      where: { groupId: willowGroup.id, userId: mate.id, role: "MEMBER" },
+    });
+  }
+
+  console.log("Seeded Wave1+Wave2 demos");
 }
 
 main().finally(() => prisma.$disconnect());
