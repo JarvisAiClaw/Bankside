@@ -104,6 +104,16 @@ export function AvatarMenu({
           >
             Notifications{unreadCount ? ` (${unreadCount})` : ""}
           </Link>
+          {role === "ADMIN" ? (
+            <Link
+              href="/admin"
+              role="menuitem"
+              className="btn-ghost w-full justify-start !px-2"
+              onClick={() => setOpen(false)}
+            >
+              Admin
+            </Link>
+          ) : null}
           <form action={logout} className="mt-1">
             <button type="submit" role="menuitem" className="btn-ghost w-full justify-start !px-2">
               Log out

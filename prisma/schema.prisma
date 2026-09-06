@@ -32,6 +32,7 @@ enum NotificationType {
   JOIN_APPROVED
   JOIN_DENIED
   DM
+  POST_REPORT
 }
 
 enum JoinRequestStatus {
@@ -55,6 +56,7 @@ model User {
   notifications  Notification[] @relation("NotificationRecipient")
   actedNotices   Notification[] @relation("NotificationActor")
   joinRequests   JoinRequest[]
+  postReports    PostReport[]
   dmThreadsA     DmThread[]     @relation("DmUserA")
   dmThreadsB     DmThread[]     @relation("DmUserB")
   dmMessages     DmMessage[]
@@ -110,12 +112,14 @@ model Post {
   imageUrl  String?
   official  Boolean    @default(false)
   pinned    Boolean    @default(false)
+  hidden    Boolean    @default(false)
   authorId  String
   groupId   String
   author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
   group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
   comments  Comment[]
   reactions Reaction[]
+  reports   PostReport[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }
@@ -197,4 +201,27 @@ model DmMessage {
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+}
+
+model PostReport {
+  id         String   @id @default(cuid())
+  postId     String
+  reporterId String
+  reason     String?
+  createdAt  DateTime @default(now())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reporter   User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, reporterId])
+  @@index([postId])
+}
+
+model BrandSpot {
+  id        String   @id @default(cuid())
+  title     String
+  body      String?
+  href      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -3,10 +3,12 @@ import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { JoinRequestStatus, MembershipRole, Role } from "@/generated/prisma/client";
 import {
+  hidePost,
   postNoticeTemplate,
   regenerateInvite,
   removeMember,
   resolveJoinRequest,
+  setMemberRole,
   toggleOfficial,
   togglePin,
   toggleVenueFeatured,
@@ -117,20 +119,20 @@ export default async function VenueAdmin({
         </div>
 
 
-        {user.role === Role.ADMIN ? (
-          <section className="border border-border bg-surface px-4 py-4">
-            <h2 className="text-title text-ink">Admin · Featured</h2>
-            <p className="mt-1 text-ui text-muted">
-              Monetisation stub only — no payments. Featured venues show a badge on Discover.
-            </p>
-            <form action={toggleVenueFeatured} className="mt-3">
-              <input type="hidden" name="venueSlug" value={venue.slug} />
-              <button type="submit" className="btn-secondary">
-                {venue.featured ? "Remove featured" : "Mark featured"}
-              </button>
-            </form>
-          </section>
-        ) : null}
+        <section className="border border-border bg-surface px-4 py-4">
+          <h2 className="text-title text-ink">
+            {user.role === Role.ADMIN ? "Admin · Featured" : "Featured"}
+          </h2>
+          <p className="mt-1 text-ui text-muted">
+            Monetisation stub only — no payments. Featured venues show a badge on Discover.
+          </p>
+          <form action={toggleVenueFeatured} className="mt-3">
+            <input type="hidden" name="venueSlug" value={venue.slug} />
+            <button type="submit" className="btn-secondary">
+              {venue.featured ? "Remove featured" : "Mark featured"}
+            </button>
+          </form>
+        </section>
 
         <section className="border border-border bg-surface px-4 py-4">
           <h2 className="text-title text-ink">Rules &amp; gate codes</h2>
@@ -350,16 +352,35 @@ export default async function VenueAdmin({
                   <p className="text-ui font-semibold text-ink">{m.user.name}</p>
                   <p className="text-meta text-muted">{m.user.email}</p>
                 </div>
-                {m.role !== MembershipRole.MEMBER ? (
-                  <Badge variant="role">{m.role === "OWNER" ? "Owner" : "Moderator"}</Badge>
+                {m.role === MembershipRole.OWNER ? (
+                  <Badge variant="role">Owner</Badge>
                 ) : (
-                  <form action={removeMember}>
-                    <input type="hidden" name="membershipId" value={m.id} />
-                    <input type="hidden" name="venueSlug" value={venue.slug} />
-                    <button type="submit" className="btn-ghost !min-h-10 text-danger">
-                      Remove
-                    </button>
-                  </form>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {m.role === MembershipRole.MODERATOR ? (
+                      <Badge variant="role">Moderator</Badge>
+                    ) : (
+                      <span className="text-meta text-muted">Member</span>
+                    )}
+                    <form action={setMemberRole}>
+                      <input type="hidden" name="membershipId" value={m.id} />
+                      <input type="hidden" name="venueSlug" value={venue.slug} />
+                      <input
+                        type="hidden"
+                        name="role"
+                        value={m.role === MembershipRole.MODERATOR ? "MEMBER" : "MODERATOR"}
+                      />
+                      <button type="submit" className="btn-secondary !min-h-10">
+                        {m.role === MembershipRole.MODERATOR ? "Demote" : "Promote"}
+                      </button>
+                    </form>
+                    <form action={removeMember}>
+                      <input type="hidden" name="membershipId" value={m.id} />
+                      <input type="hidden" name="venueSlug" value={venue.slug} />
+                      <button type="submit" className="btn-ghost !min-h-10 text-danger">
+                        Remove
+                      </button>
+                    </form>
+                  </div>
                 )}
               </li>
             ))}
@@ -378,6 +399,7 @@ export default async function VenueAdmin({
                   <strong className="text-ui text-ink">{p.author.name}</strong>
                   {p.official ? <Badge variant="official">Official</Badge> : null}
                   {p.pinned ? <Badge variant="pinned">Pinned</Badge> : null}
+                  {p.hidden ? <Badge variant="role">Hidden</Badge> : null}
                   <span className="text-meta text-muted">{formatRelativeTime(p.createdAt)}</span>
                 </div>
                 <p className="mt-1 line-clamp-3 text-ui text-ink">{p.body}</p>
@@ -395,6 +417,14 @@ export default async function VenueAdmin({
                     <input type="hidden" name="venueSlug" value={venue.slug} />
                     <button type="submit" className="btn-secondary !min-h-10">
                       {p.official ? "Clear official" : "Mark official"}
+                    </button>
+                  </form>
+                  <form action={hidePost}>
+                    <input type="hidden" name="postId" value={p.id} />
+                    <input type="hidden" name="returnPath" value={`/owner/venues/${venue.slug}`} />
+                    <input type="hidden" name="venueSlug" value={venue.slug} />
+                    <button type="submit" className="btn-secondary !min-h-10 text-danger">
+                      {p.hidden ? "Unhide" : "Hide"}
                     </button>
                   </form>
                 </div>

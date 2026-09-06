@@ -13,12 +13,13 @@ export default async function GroupPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ error?: string; tab?: string }>;
+  searchParams: Promise<{ error?: string; tab?: string; q?: string }>;
 }) {
   const { slug } = await params;
-  const { error, tab: tabParam } = await searchParams;
+  const { error, tab: tabParam, q } = await searchParams;
   const activeTab: GroupTab =
     tabParam === "about" || tabParam === "members" ? tabParam : "posts";
+  const query = (q || "").trim();
 
   const user = await getCurrentUser();
   const group = await db.group.findUnique({
@@ -56,6 +57,14 @@ export default async function GroupPage({
       }))
     : false;
 
+  const visiblePosts = group.posts.filter((p) => canModerate || !p.hidden);
+  const searchedPosts = query
+    ? visiblePosts.filter((p) => p.body.toLowerCase().includes(query.toLowerCase()))
+    : visiblePosts;
+  const officialNotices = visiblePosts
+    .filter((p) => p.official || p.pinned)
+    .slice(0, 6);
+
   return (
     <div>
       <div className="shell pt-4">
@@ -73,6 +82,39 @@ export default async function GroupPage({
       <div className="shell max-w-3xl py-4" role="tabpanel">
         {activeTab === "posts" ? (
           <div className="space-y-2">
+            {officialNotices.length ? (
+              <section className="border border-border bg-surface">
+                <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-ui font-semibold text-ink">Official noticeboard</h2>
+                    <Badge variant="official">Official</Badge>
+                  </div>
+                  <Link
+                    href={`/groups/${slug}?tab=about`}
+                    className="text-meta font-semibold text-brand hover:underline"
+                  >
+                    Rules &amp; gate
+                  </Link>
+                </div>
+                <ul className="divide-y divide-border">
+                  {officialNotices.map((p) => (
+                    <li key={p.id} className="px-3 py-2">
+                      <a
+                        href={`#post-${p.id}`}
+                        className="block text-ui text-ink hover:text-brand"
+                      >
+                        <span className="line-clamp-2 whitespace-pre-wrap">{p.body}</span>
+                        <span className="mt-0.5 block text-meta text-muted">
+                          {p.pinned ? "Pinned · " : ""}
+                          {p.author.name}
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             {membership ? (
               <div className="border border-border">
                 <Composer
@@ -82,12 +124,36 @@ export default async function GroupPage({
                 />
               </div>
             ) : null}
-            {group.posts.length ? (
-              group.posts.map((p) => (
+
+            <form method="get" className="flex flex-wrap gap-2" role="search">
+              <label className="sr-only" htmlFor="group-post-search">
+                Search posts in this group
+              </label>
+              <input
+                id="group-post-search"
+                name="q"
+                type="search"
+                defaultValue={query}
+                placeholder="Search posts…"
+                className="field min-w-[12rem] flex-1"
+              />
+              <button type="submit" className="btn">
+                Search
+              </button>
+              {query ? (
+                <Link href={`/groups/${slug}`} className="btn-secondary">
+                  Clear
+                </Link>
+              ) : null}
+            </form>
+
+            {searchedPosts.length ? (
+              searchedPosts.map((p) => (
                 <PostRow
                   key={p.id}
                   post={{
                     ...p,
+                    authorId: p.authorId,
                     likeCount: p._count.reactions,
                     likedByMe: user ? p.reactions.some((r) => r.userId === user.id) : false,
                     comments: p.comments,
@@ -96,11 +162,15 @@ export default async function GroupPage({
                   slug={slug}
                   canModerate={canModerate}
                   canInteract={!!membership}
-                  returnPath={`/groups/${slug}`}
+                  returnPath={query ? `/groups/${slug}?q=${encodeURIComponent(query)}` : `/groups/${slug}`}
+                  currentUserId={user?.id}
                 />
               ))
             ) : (
-              <EmptyState title="No posts yet" body="Be the first to share an update." />
+              <EmptyState
+                title={query ? "No matching posts" : "No posts yet"}
+                body={query ? `Nothing matches “${query}”.` : "Be the first to share an update."}
+              />
             )}
           </div>
         ) : null}
@@ -140,10 +210,13 @@ export default async function GroupPage({
                 {group.venue.gateCode || group.venue.gateNotes ? (
                   <div className="mt-4 border-t border-border pt-4">
                     <p className="text-ui font-semibold text-ink">Gate / access</p>
-                    {group.venue.gateCode ? (
+                    {group.venue.gateCode && membership ? (
                       <p className="mt-2 rounded-md bg-canvas px-3 py-2 font-mono text-ui text-ink">
                         {group.venue.gateCode}
                       </p>
+                    ) : null}
+                    {group.venue.gateCode && !membership ? (
+                      <p className="mt-2 text-ui text-muted">Join to see the gate code.</p>
                     ) : null}
                     {group.venue.gateNotes ? (
                       <p className="mt-2 whitespace-pre-wrap text-ui text-muted">{group.venue.gateNotes}</p>

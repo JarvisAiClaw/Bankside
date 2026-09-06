@@ -63,10 +63,22 @@ Chris’s intent for Bankside, locked as the product compass. Multi-week fully f
 - Compose file-picker Add photo restyle (Pepper non-blocking)
 - Tests / smoke scripts; reliability edges
 
+
+## Monetisation (stubs only — free forever core)
+
+**Locked:** Clubs and anglers stay **free forever**. No Stripe. No paywall on social, groups, DMs, noticeboard, or venue management.
+
+What may pay later (never required for the free core):
+- **Fisheries / syndicates** — optional nominal fee for extra reach or ops tools (not built yet).
+- **Brand placements** — Discover Partner card (`BrandSpot` model + optional `BRAND_SPOT_TITLE` / `BODY` / `HREF` env). Admin edits at `/admin`.
+- **Featured venues** — `Venue.featured` badge + Discover featured row; toggle on `/admin` (ADMIN) or venue admin panel.
+
+These are evidence that monetisation can sit **beside** the free product, not instead of it.
+
 ## Later (roadmap weeks 4–6)
 
 - Booking – **out of north star** (do not build)
-- Monetisation experiments (brand placements / featured reach) – Week 4
+- [x] Monetisation stubs (brand placements / featured reach) — BrandSpot + featured row + /admin; no Stripe
 - Performance, moderation, a11y, UK venue pilots prep — Week 5
 - VPS docker stack beside existing site, staging for Chris – Week 6
 - Push / mobile native, three.js — post Week 6 unless pulled forward

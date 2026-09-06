@@ -127,7 +127,7 @@ async function main() {
     data: {
       featured: true,
       rulesText:
-        "• Keep to your swim and respect other anglers\n• Take litter home\n• No loud music after dusk\n• Follow all site signage",
+        "• Barbless hooks only\n• Keep to your swim and respect other anglers\n• Take litter home\n• No loud music after dusk\n• Follow all site signage",
       gateCode: "4821#",
       gateNotes: "Shut the main gate behind you. Barrier uses the same code. Codes rotate — check here before each visit.",
     },
@@ -270,6 +270,26 @@ async function main() {
   }
 
   console.log("Seeded Wave1+Wave2 demos");
+
+  // Discover Partner placement stub (no payments)
+  const existingSpot = await prisma.brandSpot.findFirst();
+  if (!existingSpot) {
+    await prisma.brandSpot.create({
+      data: {
+        title: "Bankside Partner",
+        body: "Reach UK anglers on Discover — brand placement stub. Free core unchanged.",
+        href: "/discover",
+        active: true,
+      },
+    });
+  } else {
+    await prisma.brandSpot.update({
+      where: { id: existingSpot.id },
+      data: { active: true },
+    });
+  }
+
+
 }
 
 main().finally(() => prisma.$disconnect());

@@ -27,6 +27,13 @@ async function canModerateGroup(userId: string, groupId: string) {
   return !!m && m.role !== MembershipRole.MEMBER;
 }
 
+async function isGroupOwner(userId: string, groupId: string) {
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  if (user.role === Role.ADMIN) return true;
+  const m = await db.membership.findUnique({ where: { userId_groupId: { userId, groupId } } });
+  return !!m && m.role === MembershipRole.OWNER;
+}
+
 async function notify(opts: {
   userId: string;
   type: NotificationType;
@@ -206,10 +213,19 @@ export async function leaveGroup(form: FormData) {
   const userId = await requireUser(),
     groupId = value(form, "groupId"),
     slug = value(form, "slug");
-  await db.membership.deleteMany({
-    where: { userId, groupId, role: MembershipRole.MEMBER },
+  const membership = await db.membership.findUnique({
+    where: { userId_groupId: { userId, groupId } },
   });
+  if (!membership) {
+    revalidatePath(`/groups/${slug}`);
+    return;
+  }
+  if (membership.role === MembershipRole.OWNER)
+    withError(`/groups/${slug}`, "Owners cannot leave — transfer ownership or close the venue first.");
+  await db.membership.delete({ where: { id: membership.id } });
   revalidatePath(`/groups/${slug}`);
+  revalidatePath("/feed");
+  revalidatePath("/discover");
 }
 
 export async function joinByInvite(form: FormData) {
@@ -677,4 +693,187 @@ export async function cancelJoinRequest(form: FormData) {
   await db.joinRequest.delete({ where: { id: pending.id } });
   revalidatePath(`/groups/${slug}`);
   revalidatePath("/me/notifications");
+}
+
+async function requireAdmin() {
+  const userId = await requireUser();
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  if (user.role !== Role.ADMIN) withError("/discover", "Admin only.");
+  return userId;
+}
+
+/** Owner (or platform admin) may promote/demote MEMBER <-> MODERATOR (never OWNER). */
+export async function setMemberRole(form: FormData) {
+  const userId = await requireUser();
+  const membershipId = value(form, "membershipId");
+  const venueSlug = value(form, "venueSlug");
+  const nextRole = value(form, "role"); // MEMBER | MODERATOR
+  const membership = await db.membership.findUniqueOrThrow({
+    where: { id: membershipId },
+    include: { group: true },
+  });
+  if (!(await isGroupOwner(userId, membership.groupId)))
+    withError(`/owner/venues/${venueSlug}`, "Only the owner can change member roles.");
+  if (membership.role === MembershipRole.OWNER)
+    withError(`/owner/venues/${venueSlug}`, "You cannot change the owner role.");
+  if (nextRole !== "MEMBER" && nextRole !== "MODERATOR")
+    withError(`/owner/venues/${venueSlug}`, "Role must be MEMBER or MODERATOR.");
+  await db.membership.update({
+    where: { id: membershipId },
+    data: { role: nextRole === "MODERATOR" ? MembershipRole.MODERATOR : MembershipRole.MEMBER },
+  });
+  revalidatePath(`/owner/venues/${venueSlug}`);
+  revalidatePath(`/groups/${membership.group.slug}`);
+}
+
+/** Owner/moderator hide or unhide a post (soft remove from public feeds). */
+export async function hidePost(form: FormData) {
+  const userId = await requireUser();
+  const postId = value(form, "postId");
+  const returnPath = value(form, "returnPath") || "/feed";
+  const venueSlug = value(form, "venueSlug");
+  const post = await db.post.findUniqueOrThrow({
+    where: { id: postId },
+    include: { group: true },
+  });
+  if (!(await canModerateGroup(userId, post.groupId)))
+    withError(returnPath, "You do not have permission to hide posts.");
+  await db.post.update({ where: { id: postId }, data: { hidden: !post.hidden } });
+  revalidatePath(`/groups/${post.group.slug}`);
+  revalidatePath("/feed");
+  if (venueSlug) revalidatePath(`/owner/venues/${venueSlug}`);
+  revalidatePath(returnPath);
+}
+
+/** Member report stub — notifies owners/mods; no auto-hide. */
+export async function reportPost(form: FormData) {
+  const userId = await requireUser();
+  const postId = value(form, "postId");
+  const returnPath = value(form, "returnPath") || "/feed";
+  const reason = value(form, "reason") || null;
+  const post = await db.post.findUniqueOrThrow({
+    where: { id: postId },
+    include: { group: { select: { id: true, slug: true, venueId: true } } },
+  });
+  const member = await db.membership.findUnique({
+    where: { userId_groupId: { userId, groupId: post.groupId } },
+  });
+  if (!member) withError(returnPath, "Join the group before reporting.");
+  const existing = await db.postReport.findUnique({
+    where: { postId_reporterId: { postId, reporterId: userId } },
+  });
+  if (existing) {
+    revalidatePath(returnPath);
+    return;
+  }
+  await db.postReport.create({ data: { postId, reporterId: userId, reason } });
+  const actor = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+  const mods = await db.membership.findMany({
+    where: { groupId: post.groupId, role: { in: [MembershipRole.OWNER, MembershipRole.MODERATOR] } },
+    select: { userId: true },
+  });
+  const venue = post.group.venueId
+    ? await db.venue.findUnique({ where: { id: post.group.venueId }, select: { slug: true } })
+    : null;
+  for (const m of mods) {
+    await notify({
+      userId: m.userId,
+      type: NotificationType.POST_REPORT,
+      message: `${actor.name} reported a post`,
+      link: venue ? `/owner/venues/${venue.slug}` : `/groups/${post.group.slug}#post-${postId}`,
+      actorId: userId,
+      postId,
+      groupId: post.groupId,
+    });
+  }
+  revalidatePath(returnPath);
+  revalidatePath("/me/notifications");
+}
+
+/** Admin-only featured toggle (monetisation stub — no payments). */
+export async function adminToggleVenueFeatured(form: FormData) {
+  await requireAdmin();
+  const venueSlug = value(form, "venueSlug");
+  const venue = await db.venue.findUniqueOrThrow({ where: { slug: venueSlug } });
+  await db.venue.update({ where: { id: venue.id }, data: { featured: !venue.featured } });
+  revalidatePath("/admin");
+  revalidatePath(`/owner/venues/${venueSlug}`);
+  revalidatePath("/discover");
+  revalidatePath("/owner");
+}
+
+/** Admin upsert for Discover Partner brand spot (stub). */
+export async function saveBrandSpot(form: FormData) {
+  await requireAdmin();
+  const title = value(form, "title") || "Partner";
+  const body = value(form, "body");
+  const href = value(form, "href");
+  const active = value(form, "active") === "1";
+  const existing = await db.brandSpot.findFirst({ orderBy: { updatedAt: "desc" } });
+  if (existing) {
+    await db.brandSpot.update({
+      where: { id: existing.id },
+      data: { title, body: body || null, href: href || null, active },
+    });
+  } else {
+    await db.brandSpot.create({
+      data: { title, body: body || null, href: href || null, active },
+    });
+  }
+  revalidatePath("/admin");
+  revalidatePath("/discover");
+}
+
+/** Author may edit own post body (1–2000 chars). */
+export async function editOwnPost(form: FormData) {
+  const userId = await requireUser();
+  const postId = value(form, "postId");
+  const body = value(form, "body");
+  const returnPath = value(form, "returnPath") || "/feed";
+  if (!body || body.length > 2000) withError(returnPath, "Posts must be between 1 and 2,000 characters.");
+  const post = await db.post.findUniqueOrThrow({
+    where: { id: postId },
+    include: { group: { select: { slug: true } } },
+  });
+  if (post.authorId !== userId) {
+    const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.role !== Role.ADMIN) withError(returnPath, "You can only edit your own posts.");
+  }
+  await db.post.update({ where: { id: postId }, data: { body } });
+  revalidatePath(returnPath);
+  revalidatePath(`/groups/${post.group.slug}`);
+  revalidatePath("/feed");
+}
+
+/** Author may delete own post (hard delete). Mods use hide instead. */
+export async function deleteOwnPost(form: FormData) {
+  const userId = await requireUser();
+  const postId = value(form, "postId");
+  const returnPath = value(form, "returnPath") || "/feed";
+  const post = await db.post.findUniqueOrThrow({
+    where: { id: postId },
+    include: { group: { select: { slug: true, venueId: true } } },
+  });
+  if (post.authorId !== userId) {
+    const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.role !== Role.ADMIN) withError(returnPath, "You can only delete your own posts.");
+  }
+  await db.post.delete({ where: { id: postId } });
+  revalidatePath(returnPath);
+  revalidatePath(`/groups/${post.group.slug}`);
+  revalidatePath("/feed");
+  if (post.group.venueId) {
+    const venue = await db.venue.findUnique({ where: { id: post.group.venueId } });
+    if (venue) revalidatePath(`/owner/venues/${venue.slug}`);
+  }
+}
+
+/** Alias used by PostRow / owner UI. */
+export async function togglePostHidden(form: FormData) {
+  return hidePost(form);
+}
+
+/** Alias for promote/demote UI. */
+export async function setMembershipRole(form: FormData) {
+  return setMemberRole(form);
 }

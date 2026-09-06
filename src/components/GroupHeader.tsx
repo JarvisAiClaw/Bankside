@@ -67,17 +67,19 @@ export function GroupHeader({
           <div className="flex flex-wrap gap-2 pb-1">
             {user ? (
               membership ? (
-                <form action={leaveGroup}>
-                  <input type="hidden" name="groupId" value={group.id} />
-                  <input type="hidden" name="slug" value={group.slug} />
-                  <button
-                    className="btn-secondary"
-                    disabled={membership.role !== MembershipRole.MEMBER}
-                    type="submit"
-                  >
-                    {membership.role === MembershipRole.MEMBER ? "Leave" : "Admin"}
-                  </button>
-                </form>
+                membership.role === MembershipRole.OWNER ? (
+                  <span className="btn-secondary pointer-events-none opacity-70" title="Owners cannot leave">
+                    Owner
+                  </span>
+                ) : (
+                  <form action={leaveGroup}>
+                    <input type="hidden" name="groupId" value={group.id} />
+                    <input type="hidden" name="slug" value={group.slug} />
+                    <button className="btn-secondary" type="submit">
+                      Leave group
+                    </button>
+                  </form>
+                )
               ) : pendingJoinRequest ? (
                 <form action={cancelJoinRequest} className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="groupId" value={group.id} />

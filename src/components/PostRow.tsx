@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { createComment, toggleLike, toggleOfficial, togglePin } from "@/app/actions";
+import {
+  createComment,
+  deleteOwnPost,
+  editOwnPost,
+  reportPost,
+  toggleLike,
+  toggleOfficial,
+  togglePin,
+  togglePostHidden,
+} from "@/app/actions";
 import { Avatar, Badge } from "@/components/ui";
 import { formatDate, formatRelativeTime, pluralize } from "@/lib/utils";
 
@@ -15,7 +24,9 @@ export type PostRowData = {
   body: string;
   pinned: boolean;
   official: boolean;
+  hidden?: boolean;
   createdAt: Date;
+  authorId?: string;
   author: { name: string };
   group?: { name: string; slug: string } | null;
   imageUrl?: string | null;
@@ -34,6 +45,7 @@ export function PostRow({
   returnPath,
   showOfficialToggle = false,
   venueSlug,
+  currentUserId,
 }: {
   post: PostRowData;
   canModerate?: boolean;
@@ -43,6 +55,7 @@ export function PostRow({
   returnPath?: string;
   showOfficialToggle?: boolean;
   venueSlug?: string;
+  currentUserId?: string | null;
 }) {
   const groupSlug = post.group?.slug ?? slug;
   const stamp = formatDate(post.createdAt);
@@ -50,13 +63,14 @@ export function PostRow({
   const likeCount = post.likeCount ?? 0;
   const comments = post.comments ?? [];
   const commentCount = post.commentCount ?? comments.length;
+  const isAuthor = !!currentUserId && !!post.authorId && currentUserId === post.authorId;
 
   return (
     <article
       id={`post-${post.id}`}
       className={`relative bg-surface px-3 py-2.5 sm:px-4 sm:py-3 ${
         post.pinned ? "border-l-4 border-l-signal bg-signal-subtle/40" : ""
-      }`}
+      } ${post.hidden ? "opacity-70" : ""}`}
     >
       <div className="flex gap-2.5 sm:gap-3">
         <Avatar name={post.author.name} size={40} />
@@ -65,6 +79,7 @@ export function PostRow({
             <strong className="text-ui text-ink">{post.author.name}</strong>
             {post.official ? <Badge variant="official">Official</Badge> : null}
             {post.pinned ? <Badge variant="pinned">Pinned</Badge> : null}
+            {post.hidden ? <Badge variant="role">Hidden</Badge> : null}
             <span className="text-muted" aria-hidden="true">
               ·
             </span>
@@ -122,15 +137,72 @@ export function PostRow({
               {pluralize(commentCount, "comment")}
             </span>
 
-            {canModerate ? (
-              <form action={togglePin} className="ml-auto">
+            {canInteract && !canModerate && !isAuthor ? (
+              <form action={reportPost} className="ml-auto">
                 <input type="hidden" name="postId" value={post.id} />
-                <input type="hidden" name="slug" value={groupSlug} />
-                {venueSlug ? <input type="hidden" name="venueSlug" value={venueSlug} /> : null}
-                <button type="submit" className="btn-ghost !min-h-10 !px-3 text-brand">
-                  {post.pinned ? "Unpin" : "Pin"}
+                <input type="hidden" name="returnPath" value={path} />
+                <button type="submit" className="btn-ghost !min-h-10 !px-3 text-muted">
+                  Report
                 </button>
               </form>
+            ) : null}
+
+            {isAuthor ? (
+              <details className={canInteract && !canModerate && !isAuthor ? "" : "ml-auto"}>
+                <summary className="btn-ghost !min-h-10 !px-3 cursor-pointer list-none text-muted [&::-webkit-details-marker]:hidden">
+                  Edit
+                </summary>
+                <form action={editOwnPost} className="mt-2 space-y-2 rounded-md border border-border bg-canvas p-2">
+                  <input type="hidden" name="postId" value={post.id} />
+                  <input type="hidden" name="returnPath" value={path} />
+                  <label className="sr-only" htmlFor={`edit-${post.id}`}>
+                    Edit post
+                  </label>
+                  <textarea
+                    id={`edit-${post.id}`}
+                    name="body"
+                    className="field min-h-[88px]"
+                    maxLength={2000}
+                    required
+                    defaultValue={post.body}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button type="submit" className="btn !min-h-10">
+                      Save
+                    </button>
+                  </div>
+                </form>
+              </details>
+            ) : null}
+
+            {isAuthor ? (
+              <form action={deleteOwnPost}>
+                <input type="hidden" name="postId" value={post.id} />
+                <input type="hidden" name="returnPath" value={path} />
+                <button type="submit" className="btn-ghost !min-h-10 !px-3 text-danger">
+                  Delete
+                </button>
+              </form>
+            ) : null}
+
+            {canModerate ? (
+              <>
+                <form action={togglePin} className={isAuthor ? "" : "ml-auto"}>
+                  <input type="hidden" name="postId" value={post.id} />
+                  <input type="hidden" name="slug" value={groupSlug} />
+                  {venueSlug ? <input type="hidden" name="venueSlug" value={venueSlug} /> : null}
+                  <button type="submit" className="btn-ghost !min-h-10 !px-3 text-brand">
+                    {post.pinned ? "Unpin" : "Pin"}
+                  </button>
+                </form>
+                <form action={togglePostHidden}>
+                  <input type="hidden" name="postId" value={post.id} />
+                  <input type="hidden" name="returnPath" value={path} />
+                  <button type="submit" className="btn-ghost !min-h-10 !px-3 text-danger">
+                    {post.hidden ? "Unhide" : "Hide"}
+                  </button>
+                </form>
+              </>
             ) : null}
             {showOfficialToggle ? (
               <form action={toggleOfficial}>

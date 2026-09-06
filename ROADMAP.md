@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | 1 | **Done** | Craft baseline + wave 1 social core |
 | 2 | **Done** | DMs, join requests, noticeboard templates, notif polish, featured stub |
-| 3 | **In progress (now)** | Harden owner backend, reliability, tests |
-| 4 | Planned | Monetisation experiments without breaking free core |
+| 3 | **Done (checkpoint)** | Harden owner backend, reliability, tests |
+| 4 | **Stubs shipping** | Monetisation experiments without breaking free core |
 | 5 | Planned | Performance, moderation, a11y, UK venue pilots prep |
 | 6 | Planned | VPS docker stack + staging for Chris |
 
@@ -43,7 +43,7 @@
 
 ---
 
-## Week 3 — In progress (now)
+## Week 3 — Done (checkpoint)
 
 **Harden owner backend (roles, codes/rules library, member lifecycle), reliability, tests**
 
@@ -57,10 +57,11 @@
 
 ---
 
-## Week 4 — Planned
+## Week 4 — Stubs shipping
 
 **Monetisation experiments (brand placements / featured reach) without breaking free core**
 
+- [x] Brand placements / featured reach stubs (BrandSpot + Discover Partner + featured row + `/admin`)
 - Brand placements / featured reach experiments on top of Week 2 stub
 - Nominal path possible for fisheries/syndicates only — never paywall clubs/anglers
 - Free forever core remains intact and default

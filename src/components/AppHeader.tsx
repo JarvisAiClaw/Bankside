@@ -10,11 +10,13 @@ type NavUser = { name: string; role: string } | null;
 export function AppHeader({ user, unreadCount = 0 }: { user: NavUser; unreadCount?: number }) {
   const pathname = usePathname();
   const isOwner = user?.role === "VENUE_OWNER" || user?.role === "ADMIN";
+  const isAdmin = user?.role === "ADMIN";
   const links = user
     ? [
         { href: "/feed", label: "Feed" },
         { href: "/discover", label: "Groups" },
         ...(isOwner ? [{ href: "/owner", label: "Venues" }] : []),
+        ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
       ]
     : [
         { href: "/discover", label: "Groups" },
@@ -24,6 +26,7 @@ export function AppHeader({ user, unreadCount = 0 }: { user: NavUser; unreadCoun
   function active(href: string) {
     if (href === "/feed") return pathname === "/feed" || pathname.startsWith("/compose");
     if (href === "/owner") return pathname.startsWith("/owner");
+    if (href === "/admin") return pathname.startsWith("/admin");
     if (href === "/discover") return pathname.startsWith("/discover") || pathname.startsWith("/groups");
     return pathname === href;
   }

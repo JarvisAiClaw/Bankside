@@ -1,40 +1,55 @@
 # Bankside STATUS
 
-**North star (locked):** Free forever knock-out for clubs + anglers; no booking; fishery/club management + Facebook-style social; Fishbrain-quality bar; only owners create venue groups + system global super-groups; monetise elsewhere. Full quote in PRODUCT.md. Build in **weeks, not days**. Prefer working components over polish. See ROADMAP.md.
+**North star (locked):** Free forever knock-out for clubs + anglers; no booking; fishery/club management + Facebook-style social; Fishbrain-quality bar; only owners create venue groups + system global super-groups; monetise elsewhere. Full quote in PRODUCT.md. Prefer working components over polish. Chris decides what/when — no week gates.
 
-**Now:** Waves 1–2 merged on master. **Wave 3 hardening in progress** (noticeboard library + member lifecycle + Add photo + smoke). Design LOCKED (Pepper PASS). App on `:3000`.
+**Now:** Full throttle on master. Design LOCKED (Pepper PASS). App on `:3000`.
 
 ## Versions
 - Next 16 / React 19 / Prisma 7 / Tailwind 4
 
-## Merge (6 Sep 2026 UTC+1)
-- Mid-merge conflicts aborted; master hard-reset to `grok/wave2` @ `70b2ad7` (gold worktree `/workspace/bankside-wave2`)
-- Restored ROADMAP.md + DESIGN north-star; PRODUCT/STATUS rewritten for unified tree
-- Wave1 retained inside Wave2 gold; Wave2 additive features all on master
-
-## Wave 1 (done)
-- Image upload, comments, likes, owner tools, invite regen, notifications, discover search
-
-## Wave 2 (done, on master)
-- DMs `/me/messages` + `/me/messages/[threadId]` + `/u/[id]`
-- Venue join-request queue + invite links
-- Noticeboard templates; unread badges; `Venue.featured`; Predator/Specimen globals
-
-## Wave 3 (shipping now)
-- [x] Venue structured noticeboard: `rulesText`, `gateCode`, `gateNotes` + owner Save (+ optional publish)
-- [x] Group About shows official Rules / Gate block
-- [x] Cancel pending join request; join-request empty state; members role badges + profile links
-- [x] Composer **Add photo** button restyle (hidden file input; Pepper non-blocking)
-- [x] `scripts/smoke-wave2.mjs` — DMs, compose photo, noticeboard, owner queue (**SMOKE PASS**)
-- [ ] Moderator role assignment UI (next)
-- [ ] Broader critical-path unit/integration tests
-
-## Live on :3000
-- Production `next start`; migrate deploy + seed applied (incl. Willow demo gate `4821#`)
+## Live on :3000 (checkpoint)
+- Production `next start`
 - Auth routes 307 when logged out; public discover/group/home 200
+- Demo: `admin@bankside.test` / `owner@bankside.test` / `angler@bankside.test` — password `password123`
+
+## DONE (living)
+
+### Social core
+- [x] Image upload, comments, likes, discover group search
+- [x] DMs, join-request queue, invite regen, notifications + unread badges
+- [x] Edit / delete own posts (`editOwnPost` / `deleteOwnPost` in PostRow)
+- [x] Search posts within a group (`?q=` on group Posts tab)
+- [x] Leave group (members + mods; owners blocked with clear state)
+- [x] Official noticeboard strip denser on group home (pinned/official list)
+
+### Venue / owner OS
+- [x] Venue structured noticeboard (`rulesText`, `gateCode`, `gateNotes`)
+- [x] Member lifecycle (cancel request, role badges, profile links)
+- [x] Composer Add photo
+- [x] Moderator promote/demote (`setMemberRole` on venue members)
+- [x] Report post (members) + Hide/Unhide (owner/mod); `Post.hidden` + `PostReport`
+- [x] Hidden posts filtered from feed / non-mod group view
+
+### Admin + monetisation stubs (no payments / no booking)
+- [x] `/admin` — list users + venues, toggle featured, BrandSpot editor
+- [x] Discover Partner slot (`BrandSpot` + env fallback)
+- [x] Featured venues badge/row on Discover
+- [x] Free forever core documented; no Stripe
+
+### Hardening
+- [x] Empty states + error notices on critical paths
+- [x] Smoke: `scripts/smoke-wave2.mjs`, `scripts/smoke-wave3.mjs`
 
 ## Schema
-- Wave3: Venue.rulesText, Venue.gateCode, Venue.gateNotes
+- Venue noticeboard fields
+- `Post.hidden`, `PostReport`, `NotificationType.POST_REPORT`
+- `BrandSpot`
+- Migration: `20260906130000_mod_hide_brand` (idempotent)
+
+## Next (no week labels — Chris picks)
+- Club vs fishery type field on owner register (if still thin)
+- Broader tests / a11y / UK pilot seed polish
+- Whatever else clearly missing for Facebook-replacement + light venue OS
 
 ## Screenshots
-- Wave1 previews + preview-dms.png, preview-join-requests.png
+- Wave1/2 previews in tree; later work verified via smoke + live `:3000`

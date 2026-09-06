@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { GroupRow } from "@/components/GroupRow";
+import { BrandSpotCard } from "@/components/BrandSpotCard";
 
 export const metadata = { title: "Groups" };
 
@@ -13,25 +14,39 @@ export default async function Discover({
   const active = filter === "communities" || filter === "venues" ? filter : "all";
   const query = (q || "").trim();
 
-  const groups = await db.group.findMany({
-    where: {
-      AND: [
-        active === "communities"
-          ? { type: "GLOBAL" }
-          : active === "venues"
-            ? { type: "VENUE" }
-            : {},
-        query
-          ? { name: { contains: query, mode: "insensitive" } }
-          : {},
-      ],
-    },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    include: {
-      venue: { select: { location: true, featured: true } },
-      _count: { select: { memberships: true, posts: true } },
-    },
-  });
+  const [groups, brandSpot] = await Promise.all([
+    db.group.findMany({
+      where: {
+        AND: [
+          active === "communities"
+            ? { type: "GLOBAL" }
+            : active === "venues"
+              ? { type: "VENUE" }
+              : {},
+          query ? { name: { contains: query, mode: "insensitive" } } : {},
+        ],
+      },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+      include: {
+        venue: { select: { location: true, featured: true } },
+        _count: { select: { memberships: true, posts: true } },
+      },
+    }),
+    db.brandSpot.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } }),
+  ]);
+
+  const envTitle = process.env.BANKSIDE_PARTNER_TITLE || process.env.BRAND_SPOT_TITLE;
+  const envBody = process.env.BANKSIDE_PARTNER_BODY || process.env.BRAND_SPOT_BODY;
+  const envHref = process.env.BANKSIDE_PARTNER_HREF || process.env.BRAND_SPOT_HREF;
+  const partner =
+    brandSpot ||
+    (envTitle
+      ? {
+          title: envTitle,
+          body: envBody || null,
+          href: envHref || null,
+        }
+      : null);
 
   const filters = [
     { id: "all", label: "All", href: query ? `/discover?q=${encodeURIComponent(query)}` : "/discover" },
@@ -98,6 +113,12 @@ export default async function Discover({
           );
         })}
       </div>
+
+      {partner ? (
+        <div className="mt-4">
+          <BrandSpotCard spot={partner} />
+        </div>
+      ) : null}
 
       <div className="mt-4 overflow-hidden border border-border">
         {groups.length ? (

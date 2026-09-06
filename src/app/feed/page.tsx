@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { MembershipRole, Role } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
 import { PostRow } from "@/components/PostRow";
@@ -11,31 +12,37 @@ export default async function Feed() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [posts, memberships] = await Promise.all([
-    db.post.findMany({
-      where: { group: { memberships: { some: { userId: user.id } } } },
-      include: {
-        author: { select: { name: true } },
-        group: { select: { name: true, slug: true } },
-        comments: {
-          include: { author: { select: { name: true } } },
-          orderBy: { createdAt: "asc" },
-          take: 8,
-        },
-        reactions: { where: { type: "LIKE" }, select: { userId: true } },
-        _count: { select: { comments: true, reactions: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    db.membership.findMany({
-      where: { userId: user.id },
-      include: { group: { select: { id: true, slug: true, name: true } } },
-      orderBy: { joinedAt: "asc" },
-    }),
-  ]);
-
+  const memberships = await db.membership.findMany({
+    where: { userId: user.id },
+    include: { group: { select: { id: true, slug: true, name: true } } },
+    orderBy: { joinedAt: "asc" },
+  });
   const groups = memberships.map((m) => m.group);
+  const modGroupIds = new Set(
+    memberships
+      .filter((m) => m.role !== MembershipRole.MEMBER || user.role === Role.ADMIN)
+      .map((m) => m.groupId),
+  );
+
+  const posts = await db.post.findMany({
+    where: {
+      group: { memberships: { some: { userId: user.id } } },
+      OR: [{ hidden: false }, { groupId: { in: [...modGroupIds] } }, { authorId: user.id }],
+    },
+    include: {
+      author: { select: { name: true } },
+      group: { select: { name: true, slug: true } },
+      comments: {
+        include: { author: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
+        take: 8,
+      },
+      reactions: { where: { type: "LIKE" }, select: { userId: true } },
+      _count: { select: { comments: true, reactions: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
 
   return (
     <div className="feed-shell feed-dense py-3 md:py-5">
@@ -57,6 +64,7 @@ export default async function Feed() {
               key={p.id}
               post={{
                 ...p,
+                authorId: p.authorId,
                 likeCount: p._count.reactions,
                 likedByMe: p.reactions.some((r) => r.userId === user.id),
                 comments: p.comments,
@@ -65,7 +73,9 @@ export default async function Feed() {
               slug={p.group.slug}
               showGroup
               canInteract
+              canModerate={user.role === Role.ADMIN || modGroupIds.has(p.groupId)}
               returnPath="/feed"
+              currentUserId={user.id}
             />
           ))
         ) : (

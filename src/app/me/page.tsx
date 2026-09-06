@@ -49,6 +49,15 @@ export default async function MePage() {
           <span>Messages</span>
           <span className="text-meta font-normal text-muted">DMs</span>
         </Link>
+        {user.role === "ADMIN" ? (
+          <Link
+            href="/admin"
+            className="flex items-center justify-between border-b border-border px-4 py-3 text-ui font-semibold text-ink hover:bg-canvas/60"
+          >
+            <span>Admin</span>
+            <span className="text-meta font-normal text-muted">Users · venues · partner</span>
+          </Link>
+        ) : null}
         <Link
           href="/discover"
           className="flex items-center justify-between px-4 py-3 text-ui font-semibold text-ink hover:bg-canvas/60"
