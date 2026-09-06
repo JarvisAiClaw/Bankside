@@ -67,6 +67,9 @@ model Venue {
   description String
   location    String
   featured    Boolean  @default(false)
+  rulesText   String?  @db.Text
+  gateCode    String?
+  gateNotes   String?  @db.Text
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   group       Group?

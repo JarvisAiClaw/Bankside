@@ -11,6 +11,7 @@ import {
   togglePin,
   toggleVenueFeatured,
   updateVenue,
+  updateVenueNoticeboard,
 } from "@/app/actions";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
@@ -131,11 +132,66 @@ export default async function VenueAdmin({
           </section>
         ) : null}
 
+        <section className="border border-border bg-surface px-4 py-4">
+          <h2 className="text-title text-ink">Rules &amp; gate codes</h2>
+          <p className="mt-1 text-ui text-muted">
+            First-class noticeboard library for this venue. Shown on the group About tab. Optionally
+            publish a pinned official post when you save.
+          </p>
+          <form action={updateVenueNoticeboard} className="mt-3 space-y-3">
+            <input type="hidden" name="venueSlug" value={venue.slug} />
+            <div>
+              <label className="label" htmlFor="rules-text">
+                Fishery rules
+              </label>
+              <textarea
+                id="rules-text"
+                name="rulesText"
+                className="field min-h-[120px]"
+                placeholder="Keep to your swim… take litter home…"
+                defaultValue={venue.rulesText ?? ""}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="gate-code">
+                Main gate code
+              </label>
+              <input
+                id="gate-code"
+                name="gateCode"
+                className="field font-mono"
+                maxLength={64}
+                placeholder="e.g. 4821#"
+                defaultValue={venue.gateCode ?? ""}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="gate-notes">
+                Gate / access notes
+              </label>
+              <textarea
+                id="gate-notes"
+                name="gateNotes"
+                className="field min-h-[72px]"
+                placeholder="Shut gates behind you. Codes rotate weekly."
+                defaultValue={venue.gateNotes ?? ""}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-ui text-ink">
+              <input type="checkbox" name="publish" value="1" className="accent-brand" />
+              Also publish pinned official noticeboard post
+            </label>
+            <button type="submit" className="btn">
+              Save noticeboard
+            </button>
+          </form>
+        </section>
+
         {venue.group ? (
           <section className="border border-border bg-surface px-4 py-4">
-            <h2 className="text-title text-ink">Noticeboard templates</h2>
+            <h2 className="text-title text-ink">Quick templates</h2>
             <p className="mt-1 text-ui text-muted">
-              Quick official + pinned posts for Rules, Gate codes, or Updates.
+              One-tap official + pinned starter posts (rules / gate / updates).
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {(["rules", "gate", "update"] as const).map((template) => (
@@ -152,42 +208,48 @@ export default async function VenueAdmin({
           </section>
         ) : null}
 
-        {(venue.group?.joinRequests?.length ?? 0) > 0 ? (
+        {venue.group ? (
           <section className="border border-border bg-surface">
             <div className="border-b border-border px-4 py-3">
               <h2 className="text-title text-ink">Join requests</h2>
-              <p className="mt-1 text-ui text-muted">Approve or deny alongside invite links.</p>
+              <p className="mt-1 text-ui text-muted">
+                Approve or deny alongside invite links. Pending: {venue.group.joinRequests.length}.
+              </p>
             </div>
-            <ul>
-              {venue.group!.joinRequests.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-0"
-                >
-                  <Avatar name={r.user.name} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-ui font-semibold text-ink">{r.user.name}</p>
-                    <p className="text-meta text-muted">{r.user.email}</p>
-                  </div>
-                  <form action={resolveJoinRequest}>
-                    <input type="hidden" name="requestId" value={r.id} />
-                    <input type="hidden" name="venueSlug" value={venue.slug} />
-                    <input type="hidden" name="decision" value="approve" />
-                    <button type="submit" className="btn !min-h-10">
-                      Approve
-                    </button>
-                  </form>
-                  <form action={resolveJoinRequest}>
-                    <input type="hidden" name="requestId" value={r.id} />
-                    <input type="hidden" name="venueSlug" value={venue.slug} />
-                    <input type="hidden" name="decision" value="deny" />
-                    <button type="submit" className="btn-secondary !min-h-10">
-                      Deny
-                    </button>
-                  </form>
-                </li>
-              ))}
-            </ul>
+            {venue.group.joinRequests.length ? (
+              <ul>
+                {venue.group.joinRequests.map((r) => (
+                  <li
+                    key={r.id}
+                    className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+                  >
+                    <Avatar name={r.user.name} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-ui font-semibold text-ink">{r.user.name}</p>
+                      <p className="text-meta text-muted">{r.user.email}</p>
+                    </div>
+                    <form action={resolveJoinRequest}>
+                      <input type="hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="venueSlug" value={venue.slug} />
+                      <input type="hidden" name="decision" value="approve" />
+                      <button type="submit" className="btn !min-h-10">
+                        Approve
+                      </button>
+                    </form>
+                    <form action={resolveJoinRequest}>
+                      <input type="hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="venueSlug" value={venue.slug} />
+                      <input type="hidden" name="decision" value="deny" />
+                      <button type="submit" className="btn-secondary !min-h-10">
+                        Deny
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-4 py-4 text-ui text-muted">No pending join requests.</p>
+            )}
           </section>
         ) : null}
 

@@ -602,3 +602,79 @@ export async function sendDm(form: FormData) {
   revalidatePath("/me/messages");
   revalidatePath("/me/notifications");
 }
+
+
+export async function updateVenueNoticeboard(form: FormData) {
+  const userId = await requireUser();
+  const venueSlug = value(form, "venueSlug");
+  const rulesText = value(form, "rulesText");
+  const gateCode = value(form, "gateCode");
+  const gateNotes = value(form, "gateNotes");
+  const publish = value(form, "publish") === "1";
+  const venue = await db.venue.findUniqueOrThrow({
+    where: { slug: venueSlug },
+    include: { group: true },
+  });
+  if (venue.ownerId !== userId) {
+    const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.role !== Role.ADMIN)
+      withError(`/owner/venues/${venueSlug}`, "You do not own this venue.");
+  }
+  if (gateCode && gateCode.length > 64)
+    withError(`/owner/venues/${venueSlug}`, "Gate code must be 64 characters or fewer.");
+  if (rulesText && rulesText.length > 8000)
+    withError(`/owner/venues/${venueSlug}`, "Rules text is too long.");
+  if (gateNotes && gateNotes.length > 2000)
+    withError(`/owner/venues/${venueSlug}`, "Gate notes are too long.");
+
+  await db.venue.update({
+    where: { id: venue.id },
+    data: {
+      rulesText: rulesText || null,
+      gateCode: gateCode || null,
+      gateNotes: gateNotes || null,
+    },
+  });
+
+  if (publish && venue.group) {
+    const parts: string[] = [];
+    if (rulesText) parts.push(`Fishery rules\n\n${rulesText}`);
+    if (gateCode || gateNotes) {
+      const codeLine = gateCode ? `Main gate code: ${gateCode}` : "Main gate code: (not set)";
+      const notesLine = gateNotes ? `\n${gateNotes}` : "";
+      parts.push(`Gate / access\n\n${codeLine}${notesLine}\nPlease shut gates behind you.`);
+    }
+    if (parts.length) {
+      await db.post.create({
+        data: {
+          body: parts.join("\n\n—\n\n"),
+          groupId: venue.group.id,
+          authorId: userId,
+          official: true,
+          pinned: true,
+        },
+      });
+      revalidatePath(`/groups/${venue.group.slug}`);
+      revalidatePath("/feed");
+    }
+  }
+
+  revalidatePath(`/owner/venues/${venueSlug}`);
+  if (venue.group) revalidatePath(`/groups/${venue.group.slug}`);
+}
+
+export async function cancelJoinRequest(form: FormData) {
+  const userId = await requireUser();
+  const groupId = value(form, "groupId");
+  const slug = value(form, "slug");
+  const pending = await db.joinRequest.findUnique({
+    where: { groupId_userId: { groupId, userId } },
+  });
+  if (!pending || pending.status !== JoinRequestStatus.PENDING) {
+    revalidatePath(`/groups/${slug}`);
+    return;
+  }
+  await db.joinRequest.delete({ where: { id: pending.id } });
+  revalidatePath(`/groups/${slug}`);
+  revalidatePath("/me/notifications");
+}

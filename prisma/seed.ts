@@ -122,7 +122,16 @@ async function main() {
     }
   }
 
-  await prisma.venue.update({ where: { id: venue!.id }, data: { featured: true } });
+  await prisma.venue.update({
+    where: { id: venue!.id },
+    data: {
+      featured: true,
+      rulesText:
+        "• Keep to your swim and respect other anglers\n• Take litter home\n• No loud music after dusk\n• Follow all site signage",
+      gateCode: "4821#",
+      gateNotes: "Shut the main gate behind you. Barrier uses the same code. Codes rotate — check here before each visit.",
+    },
+  });
 
   // Media-first demo posts
   const mediaPosts = [

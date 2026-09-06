@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { joinGroup, leaveGroup } from "@/app/actions";
+import { cancelJoinRequest, joinGroup, leaveGroup } from "@/app/actions";
 import { Avatar, Badge } from "@/components/ui";
 import { pluralize } from "@/lib/utils";
 import { MembershipRole } from "@/generated/prisma/client";
@@ -79,9 +79,14 @@ export function GroupHeader({
                   </button>
                 </form>
               ) : pendingJoinRequest ? (
-                <button className="btn-secondary" type="button" disabled>
-                  Request pending
-                </button>
+                <form action={cancelJoinRequest} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="groupId" value={group.id} />
+                  <input type="hidden" name="slug" value={group.slug} />
+                  <span className="text-ui text-muted">Request pending</span>
+                  <button className="btn-secondary" type="submit">
+                    Cancel request
+                  </button>
+                </form>
               ) : (
                 <form action={joinGroup}>
                   <input type="hidden" name="groupId" value={group.id} />

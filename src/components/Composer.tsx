@@ -1,3 +1,6 @@
+"use client";
+
+import { useRef, useState } from "react";
 import { createPost } from "@/app/actions";
 import { Avatar } from "@/components/ui";
 
@@ -15,6 +18,8 @@ export function Composer({
   returnTo?: string;
 }) {
   const needsPicker = !fixedGroup && groups && groups.length > 0;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileLabel, setFileLabel] = useState<string | null>(null);
   if (!fixedGroup && (!groups || !groups.length)) return null;
 
   return (
@@ -60,27 +65,41 @@ export function Composer({
               placeholder="What’s happening at the water?"
             />
           </div>
-          <div>
-            <label className="label" htmlFor="composer-image">
-              Photo <span className="font-normal text-muted">(optional)</span>
-            </label>
-            <input
-              id="composer-image"
-              name="image"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className="block w-full text-ui text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand-subtle file:px-3 file:py-2 file:text-ui file:font-semibold file:text-brand"
-            />
-          </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {canOfficial ? (
-              <label className="text-ui text-ink">
-                <input type="checkbox" name="official" className="mr-2 accent-brand" />
-                Official update
-              </label>
-            ) : (
-              <span />
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileRef}
+                id="composer-image"
+                name="image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  setFileLabel(f ? f.name : null);
+                }}
+              />
+              <button
+                type="button"
+                className="btn-secondary !min-h-10"
+                onClick={() => fileRef.current?.click()}
+              >
+                Add photo
+              </button>
+              {fileLabel ? (
+                <span className="max-w-[12rem] truncate text-meta text-muted" title={fileLabel}>
+                  {fileLabel}
+                </span>
+              ) : (
+                <span className="text-meta text-muted">Optional</span>
+              )}
+              {canOfficial ? (
+                <label className="ml-1 text-ui text-ink">
+                  <input type="checkbox" name="official" className="mr-2 accent-brand" />
+                  Official update
+                </label>
+              ) : null}
+            </div>
             <button type="submit" className="btn">
               Post
             </button>
