@@ -18,6 +18,9 @@ import {
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
 import { Avatar, Badge, Notice } from "@/components/ui";
+import { InviteQr } from "@/components/InviteQr";
+import { CopyInviteButton } from "@/components/CopyInviteButton";
+import { headers } from "next/headers";
 import { formatRelativeTime, pluralize } from "@/lib/utils";
 
 export default async function VenueAdmin({
@@ -60,6 +63,10 @@ export default async function VenueAdmin({
   const inviteUrl = venue.group?.inviteToken
     ? `/join/${venue.group.inviteToken}`
     : null;
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
+  const proto = h.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  const absoluteInvite = inviteUrl ? `${proto}://${host}${inviteUrl}` : null;
 
   return (
     <div>
@@ -84,7 +91,12 @@ export default async function VenueAdmin({
             <Avatar name={venue.name} size={72} />
             <div className="min-w-0 flex-1 pb-1">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="venue">Venue</Badge>
+                <Badge variant={venue.venueType === "CLUB" ? "community" : "venue"}>
+                  {venue.venueType === "CLUB" ? "Club" : "Fishery"}
+                </Badge>
+                {venue.venueType === "CLUB" ? (
+                  <span className="text-meta font-semibold text-brand">Free forever</span>
+                ) : null}
                 {venue.featured ? <Badge variant="featured">Featured</Badge> : null}
               </div>
               <h1 className="mt-1 text-title text-ink sm:text-display">{venue.name}</h1>
@@ -255,15 +267,26 @@ export default async function VenueAdmin({
           </section>
         ) : null}
 
-        {inviteUrl ? (
+        {inviteUrl && absoluteInvite ? (
           <section className="border border-border bg-surface px-4 py-4">
             <h2 className="text-title text-ink">Invite link</h2>
             <p className="mt-1 text-ui text-muted">
-              Anyone with this link can join. Regenerate to revoke older links.
+              Share without email — link or QR. Regenerate to revoke older links.
             </p>
-            <p className="mt-3 break-all rounded-md bg-canvas px-3 py-2 font-mono text-meta text-ink">
-              {inviteUrl}
-            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+              <InviteQr url={absoluteInvite} />
+              <div className="min-w-0 flex-1">
+                <p className="break-all rounded-md bg-canvas px-3 py-2 font-mono text-meta text-ink">
+                  {absoluteInvite}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <CopyInviteButton text={absoluteInvite} />
+                  <Link href={inviteUrl} className="btn-ghost">
+                    Open invite page
+                  </Link>
+                </div>
+              </div>
+            </div>
             <form action={regenerateInvite} className="mt-3">
               <input type="hidden" name="groupId" value={venue.group!.id} />
               <input type="hidden" name="venueSlug" value={venue.slug} />

@@ -42,10 +42,13 @@ export default async function ThreadPage({
           ←
         </Link>
         <Avatar name={other.name} size={40} />
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-title text-ink">{other.name}</h1>
           <p className="text-meta text-muted">Direct message</p>
         </div>
+        <Link href={`/u/${other.id}`} className="btn-ghost shrink-0">
+          Mute / block
+        </Link>
       </div>
 
       <Notice message={error} />

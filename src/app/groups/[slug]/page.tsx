@@ -7,19 +7,30 @@ import { Notice, Badge, Avatar, EmptyState } from "@/components/ui";
 import { PostRow } from "@/components/PostRow";
 import { Composer } from "@/components/Composer";
 import { GroupHeader, type GroupTab } from "@/components/GroupHeader";
+import { PAGE_SIZE, parsePage, pageHref } from "@/lib/pagination";
 
 export default async function GroupPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ error?: string; tab?: string; q?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    tab?: string;
+    q?: string;
+    page?: string;
+    commentsPage?: string;
+    post?: string;
+  }>;
 }) {
   const { slug } = await params;
-  const { error, tab: tabParam, q } = await searchParams;
+  const { error, tab: tabParam, q, page: pageRaw, commentsPage: cPageRaw, post: focusPostId } =
+    await searchParams;
   const activeTab: GroupTab =
     tabParam === "about" || tabParam === "members" ? tabParam : "posts";
   const query = (q || "").trim();
+  const page = parsePage(pageRaw);
+  const commentsPage = parsePage(cPageRaw);
 
   const user = await getCurrentUser();
   const group = await db.group.findUnique({
@@ -29,19 +40,6 @@ export default async function GroupPage({
       memberships: {
         include: { user: { select: { id: true, name: true, role: true } } },
         orderBy: { joinedAt: "asc" },
-      },
-      posts: {
-        include: {
-          author: { select: { name: true } },
-          comments: {
-            include: { author: { select: { name: true } } },
-            orderBy: { createdAt: "asc" },
-            take: 12,
-          },
-          reactions: { where: { type: "LIKE" }, select: { userId: true } },
-          _count: { select: { comments: true, reactions: true } },
-        },
-        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       },
     },
   });
@@ -57,13 +55,60 @@ export default async function GroupPage({
       }))
     : false;
 
-  const visiblePosts = group.posts.filter((p) => canModerate || !p.hidden);
-  const searchedPosts = query
-    ? visiblePosts.filter((p) => p.body.toLowerCase().includes(query.toLowerCase()))
-    : visiblePosts;
-  const officialNotices = visiblePosts
-    .filter((p) => p.official || p.pinned)
-    .slice(0, 6);
+  const postWhere = {
+    groupId: group.id,
+    ...(canModerate ? {} : { hidden: false }),
+    ...(query ? { body: { contains: query, mode: "insensitive" as const } } : {}),
+  };
+
+  const officialNotices = await db.post.findMany({
+    where: {
+      groupId: group.id,
+      OR: [{ official: true }, { pinned: true }],
+      ...(canModerate ? {} : { hidden: false }),
+    },
+    include: { author: { select: { name: true } } },
+    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+    take: 6,
+  });
+
+  const total = await db.post.count({ where: postWhere });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  const posts = await db.post.findMany({
+    where: postWhere,
+    include: {
+      author: { select: { name: true } },
+      comments: {
+        include: { author: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
+        take: PAGE_SIZE,
+      },
+      reactions: { where: { type: "LIKE" }, select: { userId: true } },
+      _count: { select: { comments: true, reactions: true } },
+    },
+    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+    skip: (safePage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  let focusedComments: (typeof posts)[number]["comments"] | null = null;
+  if (focusPostId) {
+    focusedComments = await db.comment.findMany({
+      where: { postId: focusPostId },
+      include: { author: { select: { name: true } } },
+      orderBy: { createdAt: "asc" },
+      skip: (commentsPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    });
+  }
+
+  const basePath = `/groups/${slug}`;
+  const returnExtra: Record<string, string | undefined> = {
+    q: query || undefined,
+    tab: activeTab === "posts" ? undefined : activeTab,
+  };
 
   return (
     <div>
@@ -147,31 +192,79 @@ export default async function GroupPage({
               ) : null}
             </form>
 
-            {searchedPosts.length ? (
-              searchedPosts.map((p) => (
-                <PostRow
-                  key={p.id}
-                  post={{
-                    ...p,
-                    authorId: p.authorId,
-                    likeCount: p._count.reactions,
-                    likedByMe: user ? p.reactions.some((r) => r.userId === user.id) : false,
-                    comments: p.comments,
-                    commentCount: p._count.comments,
-                  }}
-                  slug={slug}
-                  canModerate={canModerate}
-                  canInteract={!!membership}
-                  returnPath={query ? `/groups/${slug}?q=${encodeURIComponent(query)}` : `/groups/${slug}`}
-                  currentUserId={user?.id}
-                />
-              ))
+            {posts.length ? (
+              posts.map((p) => {
+                const comments =
+                  focusPostId === p.id && focusedComments ? focusedComments : p.comments;
+                const commentCount = p._count.comments;
+                const cPages = Math.max(1, Math.ceil(commentCount / PAGE_SIZE));
+                const cPage = focusPostId === p.id ? Math.min(commentsPage, cPages) : 1;
+                const ret = pageHref(basePath, safePage, {
+                  ...returnExtra,
+                  q: query || undefined,
+                });
+                return (
+                  <PostRow
+                    key={p.id}
+                    post={{
+                      ...p,
+                      authorId: p.authorId,
+                      likeCount: p._count.reactions,
+                      likedByMe: user ? p.reactions.some((r) => r.userId === user.id) : false,
+                      comments,
+                      commentCount,
+                    }}
+                    slug={slug}
+                    canModerate={canModerate}
+                    canInteract={!!membership}
+                    returnPath={ret}
+                    currentUserId={user?.id}
+                    commentsPage={cPage}
+                    commentsTotalPages={cPages}
+                    commentsBasePath={pageHref(basePath, safePage, {
+                      ...returnExtra,
+                      q: query || undefined,
+                      post: p.id,
+                    })}
+                  />
+                );
+              })
             ) : (
               <EmptyState
                 title={query ? "No matching posts" : "No posts yet"}
                 body={query ? `Nothing matches “${query}”.` : "Be the first to share an update."}
               />
             )}
+
+            {totalPages > 1 ? (
+              <nav
+                className="flex flex-wrap items-center justify-between gap-2 pt-2"
+                aria-label="Group posts pagination"
+                data-testid="group-pagination"
+              >
+                <p className="text-meta text-muted">
+                  Page {safePage} of {totalPages} · {total} posts
+                </p>
+                <div className="flex gap-2">
+                  {safePage > 1 ? (
+                    <Link
+                      href={pageHref(basePath, safePage - 1, returnExtra)}
+                      className="btn-secondary !min-h-10"
+                    >
+                      Newer
+                    </Link>
+                  ) : null}
+                  {safePage < totalPages ? (
+                    <Link
+                      href={pageHref(basePath, safePage + 1, returnExtra)}
+                      className="btn-secondary !min-h-10"
+                    >
+                      Older
+                    </Link>
+                  ) : null}
+                </div>
+              </nav>
+            ) : null}
           </div>
         ) : null}
 

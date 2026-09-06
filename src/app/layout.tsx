@@ -50,11 +50,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       }
     >
       <body className={`min-h-screen font-sans antialiased ${user ? "has-mobile-tabs" : ""}`}>
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
         <AppHeader
           user={user ? { name: user.name, role: user.role } : null}
           unreadCount={unreadCount}
         />
-        <main>{children}</main>
+        <main id="main">{children}</main>
         {user ? <MobileTabBar isOwner={!!isOwner} /> : null}
         {!user ? (
           <footer className="border-t border-border">

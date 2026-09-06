@@ -16,21 +16,55 @@ export default async function NewVenue({ searchParams }: { searchParams: Promise
       <div className="border border-border bg-surface p-5 sm:p-6">
         <h1 className="text-title text-ink">Register a venue</h1>
         <p className="mt-2 text-ui text-muted">
-          Creates the official group and makes you the group owner.
+          Creates the official group and makes you the group owner. Clubs stay free forever on the core
+          product.
         </p>
         <Notice message={error} />
         <form action={createVenue} className="mt-5 space-y-4">
+          <fieldset>
+            <legend className="label">Venue type</legend>
+            <div className="grid gap-3">
+              <label className="cursor-pointer border border-border bg-canvas p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-subtle">
+                <input
+                  type="radio"
+                  name="venueType"
+                  value="CLUB"
+                  defaultChecked
+                  className="mr-2 accent-brand"
+                />
+                <strong className="text-ui">Club</strong>
+                <span className="mt-1 block text-ui text-muted">
+                  Free forever — social, noticeboard, members. No booking, no paywall on the core.
+                </span>
+              </label>
+              <label className="cursor-pointer border border-border bg-canvas p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-subtle">
+                <input type="radio" name="venueType" value="FISHERY" className="mr-2 accent-brand" />
+                <strong className="text-ui">Fishery / syndicate</strong>
+                <span className="mt-1 block text-ui text-muted">
+                  Same free core today. Optional nominal fee for extra reach may come later — never
+                  required for clubs or anglers.
+                </span>
+              </label>
+            </div>
+          </fieldset>
           <div>
             <label className="label" htmlFor="name">
               Venue name
             </label>
-            <input className="field" id="name" name="name" required />
+            <input className="field" id="name" name="name" required autoComplete="organization" />
           </div>
           <div>
             <label className="label" htmlFor="location">
               Location
             </label>
-            <input className="field" id="location" name="location" required placeholder="Town, county" />
+            <input
+              className="field"
+              id="location"
+              name="location"
+              required
+              placeholder="Town, county"
+              autoComplete="address-level2"
+            />
           </div>
           <div>
             <label className="label" htmlFor="description">

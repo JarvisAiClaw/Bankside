@@ -91,9 +91,16 @@ try {
     (await page.locator("text=Request").count()) > 0 ||
     (await page.locator('button:has-text("Join")').count()) > 0;
 
-  // --- Owner: join requests, noticeboard template, promote ---
+  // --- Owner dashboard at-a-glance ---
   await page.goto(`${BASE}/login`);
   await login(page, "owner@bankside.test");
+  await page.goto(`${BASE}/owner`, { waitUntil: "networkidle" });
+  results.ownerDashCards = (await page.locator('[data-testid="owner-venue-card"]').count()) > 0;
+  results.ownerGateStatus = (await page.locator('[data-testid="owner-gate-status"]').count()) > 0;
+  results.ownerLatestOfficial = (await page.locator('[data-testid="owner-latest-official"]').count()) > 0;
+  results.ownerPending = (await page.locator('[data-testid="owner-pending-count"]').count()) > 0;
+
+  // --- Owner: join requests, noticeboard template, promote ---
   await page.goto(`${BASE}/owner/venues/willow-lakes`, { waitUntil: "networkidle" });
   results.joinRequests = (await page.locator("text=Join requests").count()) > 0;
   results.noticeTemplates = (await page.locator('button:has-text("Post Rules")').count()) > 0;

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, GroupType, Role, MembershipRole } from "../src/generated/prisma/client";
+import { PrismaClient, GroupType, Role, MembershipRole, VenueType } from "../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
@@ -65,6 +65,12 @@ async function main() {
 
   let venue = await prisma.venue.findUnique({ where: { slug: "willow-lakes" } });
   // ensure featured stub for demo discover badge
+  if (venue) {
+    await prisma.venue.update({
+      where: { id: venue.id },
+      data: { featured: true, venueType: VenueType.FISHERY },
+    });
+  }
 
   if (!venue) {
     venue = await prisma.$transaction(async (tx) => {
@@ -76,6 +82,7 @@ async function main() {
           description: "A friendly mixed fishery with carp and silverfish lakes.",
           ownerId: owner.id,
           featured: true,
+          venueType: VenueType.FISHERY,
         },
       });
       const g = await tx.group.create({

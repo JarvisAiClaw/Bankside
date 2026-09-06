@@ -51,7 +51,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
               <label className="cursor-pointer border border-border bg-canvas p-3">
                 <input type="radio" name="accountType" value="venue_owner" className="mr-2 accent-brand" />
                 <strong className="text-ui">Venue owner</strong>
-                <span className="mt-1 block text-ui text-muted">Create and manage venue groups.</span>
+                <span className="mt-1 block text-ui text-muted">Create club or fishery groups. Clubs stay free forever.</span>
               </label>
             </div>
           </fieldset>

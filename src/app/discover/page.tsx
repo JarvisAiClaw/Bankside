@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { GroupRow } from "@/components/GroupRow";
 import { BrandSpotCard } from "@/components/BrandSpotCard";
+import { getActiveBrandSpot } from "@/lib/brand-spot";
 
 export const metadata = { title: "Groups" };
 
@@ -14,7 +15,7 @@ export default async function Discover({
   const active = filter === "communities" || filter === "venues" ? filter : "all";
   const query = (q || "").trim();
 
-  const [groups, brandSpot] = await Promise.all([
+  const [groups, partner] = await Promise.all([
     db.group.findMany({
       where: {
         AND: [
@@ -32,21 +33,11 @@ export default async function Discover({
         _count: { select: { memberships: true, posts: true } },
       },
     }),
-    db.brandSpot.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } }),
+    getActiveBrandSpot(),
   ]);
 
-  const envTitle = process.env.BANKSIDE_PARTNER_TITLE || process.env.BRAND_SPOT_TITLE;
-  const envBody = process.env.BANKSIDE_PARTNER_BODY || process.env.BRAND_SPOT_BODY;
-  const envHref = process.env.BANKSIDE_PARTNER_HREF || process.env.BRAND_SPOT_HREF;
-  const partner =
-    brandSpot ||
-    (envTitle
-      ? {
-          title: envTitle,
-          body: envBody || null,
-          href: envHref || null,
-        }
-      : null);
+  const featured = !query ? groups.filter((g) => g.venue?.featured) : [];
+  const rest = !query ? groups.filter((g) => !g.venue?.featured) : groups;
 
   const filters = [
     { id: "all", label: "All", href: query ? `/discover?q=${encodeURIComponent(query)}` : "/discover" },
@@ -114,18 +105,38 @@ export default async function Discover({
         })}
       </div>
 
-      {partner ? (
+      {partner && !query ? (
         <div className="mt-4">
           <BrandSpotCard spot={partner} />
         </div>
       ) : null}
 
+      {featured.length ? (
+        <section className="mt-4" aria-labelledby="featured-venues-heading">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="featured-venues-heading" className="text-ui font-semibold text-ink">
+              Featured venues
+            </h2>
+            <p className="text-meta text-muted">Reach stub · free for clubs &amp; anglers</p>
+          </div>
+          <div className="overflow-hidden border border-border border-l-4 border-l-signal">
+            {featured.map((g) => (
+              <GroupRow key={g.id} group={g} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="mt-4 overflow-hidden border border-border">
-        {groups.length ? (
-          groups.map((g) => <GroupRow key={g.id} group={g} />)
+        {rest.length ? (
+          rest.map((g) => <GroupRow key={g.id} group={g} />)
         ) : (
           <p className="bg-surface px-4 py-5 text-ui text-muted">
-            {query ? `No groups match “${query}”.` : "No groups in this filter."}
+            {query
+              ? `No groups match “${query}”.`
+              : featured.length
+                ? "No other groups in this filter."
+                : "No groups in this filter."}
           </p>
         )}
       </div>

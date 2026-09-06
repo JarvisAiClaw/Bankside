@@ -46,6 +46,9 @@ export function PostRow({
   showOfficialToggle = false,
   venueSlug,
   currentUserId,
+  commentsPage = 1,
+  commentsTotalPages = 1,
+  commentsBasePath,
 }: {
   post: PostRowData;
   canModerate?: boolean;
@@ -56,6 +59,9 @@ export function PostRow({
   showOfficialToggle?: boolean;
   venueSlug?: string;
   currentUserId?: string | null;
+  commentsPage?: number;
+  commentsTotalPages?: number;
+  commentsBasePath?: string;
 }) {
   const groupSlug = post.group?.slug ?? slug;
   const stamp = formatDate(post.createdAt);
@@ -236,6 +242,42 @@ export function PostRow({
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {commentCount > comments.length || commentsTotalPages > 1 ? (
+            <div
+              className="mt-2 flex flex-wrap items-center gap-2 text-meta text-muted"
+              data-testid="comments-pagination"
+            >
+              <span>
+                Showing {comments.length} of {commentCount} comments
+                {commentsTotalPages > 1 ? ` · page ${commentsPage}/${commentsTotalPages}` : ""}
+              </span>
+              {commentsBasePath && commentsPage > 1 ? (
+                <Link
+                  href={`${commentsBasePath}${commentsBasePath.includes("?") ? "&" : "?"}commentsPage=${commentsPage - 1}`}
+                  className="font-semibold text-brand hover:underline"
+                >
+                  Newer comments
+                </Link>
+              ) : null}
+              {commentsBasePath && commentsPage < commentsTotalPages ? (
+                <Link
+                  href={`${commentsBasePath}${commentsBasePath.includes("?") ? "&" : "?"}commentsPage=${commentsPage + 1}`}
+                  className="font-semibold text-brand hover:underline"
+                >
+                  Older comments
+                </Link>
+              ) : null}
+              {commentsBasePath && commentsTotalPages <= 1 && commentCount > comments.length ? (
+                <Link
+                  href={`${commentsBasePath}${commentsBasePath.includes("?") ? "&" : "?"}commentsPage=1`}
+                  className="font-semibold text-brand hover:underline"
+                >
+                  View all comments
+                </Link>
+              ) : null}
+            </div>
           ) : null}
 
           {canInteract ? (

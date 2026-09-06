@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Role } from "@/generated/prisma/client";
-import {
-  adminToggleVenueFeatured,
-  saveBrandSpot,
-} from "@/app/actions";
+import { adminToggleVenueFeatured, saveBrandSpot } from "@/app/actions";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
+import { getActiveBrandSpot, getBrandSpotForAdmin } from "@/lib/brand-spot";
+import { BrandSpotCard } from "@/components/BrandSpotCard";
 import { Badge, EmptyState, Notice } from "@/components/ui";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -22,7 +21,7 @@ export default async function AdminPage({
   if (user.role !== Role.ADMIN) redirect("/discover");
   const { error } = await searchParams;
 
-  const [users, venues, brand] = await Promise.all([
+  const [users, venues, brand, livePartner] = await Promise.all([
     db.user.findMany({
       orderBy: { createdAt: "desc" },
       take: 80,
@@ -42,28 +41,62 @@ export default async function AdminPage({
         group: { select: { slug: true, _count: { select: { memberships: true } } } },
       },
     }),
-    db.brandSpot.findFirst({ orderBy: { updatedAt: "desc" } }),
+    getBrandSpotForAdmin(),
+    getActiveBrandSpot(),
   ]);
+
+  const featuredCount = venues.filter((v) => v.featured).length;
 
   return (
     <div className="shell max-w-3xl space-y-4 py-6">
       <div>
         <h1 className="text-title text-ink">Admin</h1>
         <p className="mt-1 text-ui text-muted">
-          Users, venues, featured flags, and Discover partner slot. No payments.
+          Monetisation stubs + directory. No Stripe. Clubs &amp; anglers stay free forever.
         </p>
       </div>
       <Notice message={error} />
+
+      <section
+        className="grid gap-3 border border-border bg-surface px-4 py-4 sm:grid-cols-3"
+        aria-label="Monetisation stub status"
+      >
+        <div>
+          <p className="text-meta font-semibold uppercase tracking-wide text-muted">Partner slot</p>
+          <p className="mt-1 text-ui font-semibold text-ink">
+            {livePartner ? (livePartner.source === "db" ? "Active (DB)" : "Active (env)") : "Off"}
+          </p>
+        </div>
+        <div>
+          <p className="text-meta font-semibold uppercase tracking-wide text-muted">Featured venues</p>
+          <p className="mt-1 text-ui font-semibold text-ink">
+            {featuredCount} / {venues.length}
+          </p>
+        </div>
+        <div>
+          <p className="text-meta font-semibold uppercase tracking-wide text-muted">Payments</p>
+          <p className="mt-1 text-ui font-semibold text-ink">None · free core</p>
+        </div>
+      </section>
 
       <section className="border border-border bg-surface px-4 py-4">
         <h2 className="text-title text-ink">Partner / brand slot</h2>
         <p className="mt-1 text-ui text-muted">
           Shown on Discover when active. Env fallback:{" "}
           <code className="text-meta">BANKSIDE_PARTNER_TITLE</code> /{" "}
-          <code className="text-meta">_BODY</code> /{" "}
-          <code className="text-meta">_HREF</code>.
+          <code className="text-meta">_BODY</code> / <code className="text-meta">_HREF</code>.
         </p>
-        <form action={saveBrandSpot} className="mt-3 space-y-3">
+
+        {livePartner ? (
+          <div className="mt-3">
+            <p className="mb-1 text-meta font-semibold text-muted">Live preview</p>
+            <BrandSpotCard spot={livePartner} preview />
+          </div>
+        ) : (
+          <p className="mt-3 text-ui text-muted">No partner card live — activate below or set env.</p>
+        )}
+
+        <form action={saveBrandSpot} className="mt-4 space-y-3">
           <div>
             <label className="label" htmlFor="brand-title">
               Title
@@ -73,6 +106,7 @@ export default async function AdminPage({
               name="title"
               className="field"
               required
+              maxLength={120}
               defaultValue={brand?.title ?? "Partner with Bankside"}
             />
           </div>
@@ -84,6 +118,7 @@ export default async function AdminPage({
               id="brand-body"
               name="body"
               className="field min-h-[72px]"
+              maxLength={500}
               defaultValue={brand?.body ?? "Reach UK anglers — free core stays free forever."}
             />
           </div>
@@ -95,7 +130,8 @@ export default async function AdminPage({
               id="brand-href"
               name="href"
               className="field"
-              placeholder="https://"
+              placeholder="https:// or /discover"
+              maxLength={500}
               defaultValue={brand?.href ?? ""}
             />
           </div>
@@ -118,7 +154,9 @@ export default async function AdminPage({
       <section className="border border-border bg-surface">
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-title text-ink">Venues</h2>
-          <p className="mt-1 text-ui text-muted">{venues.length} registered</p>
+          <p className="mt-1 text-ui text-muted">
+            {venues.length} registered · {featuredCount} featured (Discover reach stub)
+          </p>
         </div>
         {venues.length ? (
           <ul>
@@ -142,6 +180,11 @@ export default async function AdminPage({
                     {v.group ? ` · ${v.group._count.memberships} members` : ""}
                   </p>
                 </div>
+                {v.group ? (
+                  <Link href={`/groups/${v.group.slug}`} className="btn-ghost !min-h-10">
+                    Group
+                  </Link>
+                ) : null}
                 <form action={adminToggleVenueFeatured}>
                   <input type="hidden" name="venueSlug" value={v.slug} />
                   <button type="submit" className="btn-secondary !min-h-10">
@@ -174,8 +217,8 @@ export default async function AdminPage({
                   {u.name}
                 </Link>
                 <p className="text-meta text-muted">
-                  {u.email} · {u.role} · joined {formatRelativeTime(u.createdAt)} ·{" "}
-                  {u._count.posts} posts · {u._count.memberships} groups
+                  {u.email} · {u.role} · joined {formatRelativeTime(u.createdAt)} · {u._count.posts}{" "}
+                  posts · {u._count.memberships} groups
                 </p>
               </div>
               <Badge variant="role">{u.role}</Badge>

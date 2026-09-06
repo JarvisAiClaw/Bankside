@@ -70,7 +70,7 @@ Chris’s intent for Bankside, locked as the product compass. Multi-week fully f
 
 What may pay later (never required for the free core):
 - **Fisheries / syndicates** — optional nominal fee for extra reach or ops tools (not built yet).
-- **Brand placements** — Discover Partner card (`BrandSpot` model + optional `BRAND_SPOT_TITLE` / `BODY` / `HREF` env). Admin edits at `/admin`.
+- **Brand placements** — Discover Partner card (`BrandSpot` model + optional `BANKSIDE_PARTNER_TITLE` / `_BODY` / `_HREF` env (legacy `BRAND_SPOT_*` aliases)). Admin edits at `/admin`.
 - **Featured venues** — `Venue.featured` badge + Discover featured row; toggle on `/admin` (ADMIN) or venue admin panel.
 
 These are evidence that monetisation can sit **beside** the free product, not instead of it.

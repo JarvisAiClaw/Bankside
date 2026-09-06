@@ -7,7 +7,9 @@
 ## Versions
 - Next 16 / React 19 / Prisma 7 / Tailwind 4
 
-## Live on :3000 (checkpoint)
+## Live on :3000
+- `scripts/smoke-admin-brand.mjs` **PASS** (Partner + Featured row + /admin preview/status)
+- `scripts/smoke-wave3.mjs` **PASS** (checkpoint)
 - Production `next start` (restarted after build)
 - Auth routes 307 when logged out; public discover/group/home 200; `/admin` 307 logged out
 - Demo: `admin@bankside.test` / `owner@bankside.test` / `angler@bankside.test` / `sam@bankside.test` — password `password123`
@@ -35,6 +37,7 @@
 ### Admin + monetisation stubs (no payments / no booking)
 - [x] `/admin` — users + venues, featured toggle, BrandSpot editor
 - [x] Discover Partner slot (`BrandSpot` + env fallback) — no Stripe
+- [x] Admin monetisation status strip + Partner live preview; Discover Featured venues row restored
 - [x] Featured venues badge on Discover
 - [x] Free forever core documented
 

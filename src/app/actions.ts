@@ -1,12 +1,13 @@
 "use server";
 import bcrypt from "bcryptjs";
-import { GroupType, JoinRequestStatus, MembershipRole, NotificationType, Role } from "@/generated/prisma/client";
+import { GroupType, JoinRequestStatus, MembershipRole, NotificationType, Role, UserBlockKind, VenueType } from "@/generated/prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { slugify } from "@/lib/utils";
 import { newInviteToken, saveImageUpload } from "@/lib/uploads";
+import { assertNotFlooding, assertNotDuplicateBody } from "@/lib/rate-limit";
 
 function value(form: FormData, key: string) {
   return String(form.get(key) || "").trim();
@@ -106,6 +107,8 @@ export async function createVenue(form: FormData) {
   const name = value(form, "name"),
     location = value(form, "location"),
     description = value(form, "description");
+  const venueTypeRaw = value(form, "venueType").toUpperCase();
+  const venueType = venueTypeRaw === "CLUB" ? VenueType.CLUB : VenueType.FISHERY;
   if (name.length < 2 || location.length < 2 || description.length < 10)
     withError("/owner/new", "Please complete every field (description: 10+ characters).");
   const base = slugify(name) || "venue";
@@ -114,7 +117,7 @@ export async function createVenue(form: FormData) {
   while (await db.venue.findUnique({ where: { slug } })) slug = `${base}-${n++}`;
   const venue = await db.$transaction(async (tx) => {
     const venue = await tx.venue.create({
-      data: { name, slug, location, description, ownerId: userId },
+      data: { name, slug, location, description, ownerId: userId, venueType },
     });
     const group = await tx.group.create({
       data: {
@@ -283,6 +286,12 @@ export async function createPost(form: FormData) {
   }
   if (!body || body.length > 2000)
     withError(`/groups/${slug}`, "Posts must be between 1 and 2,000 characters.");
+  const flood = assertNotFlooding(`post:${userId}`, { limit: 6, windowMs: 60_000 });
+  if (!flood.ok)
+    withError(`/groups/${slug}`, `Posting too fast — try again in ${flood.retryAfterSec}s.`);
+  const dup = assertNotDuplicateBody(`post-body:${userId}`, body, 30_000);
+  if (!dup.ok)
+    withError(`/groups/${slug}`, `Identical post within 30s — wait ${dup.retryAfterSec}s.`);
   const member = await db.membership.findUnique({
     where: { userId_groupId: { userId, groupId } },
   });
@@ -359,6 +368,12 @@ export async function createComment(form: FormData) {
   const returnPath = value(form, "returnPath") || "/feed";
   if (!body || body.length > 1000)
     withError(returnPath, "Comments must be between 1 and 1,000 characters.");
+  const flood = assertNotFlooding(`comment:${userId}`, { limit: 20, windowMs: 60_000 });
+  if (!flood.ok)
+    withError(returnPath, `Commenting too fast — try again in ${flood.retryAfterSec}s.`);
+  const dup = assertNotDuplicateBody(`comment-body:${userId}`, body, 30_000);
+  if (!dup.ok)
+    withError(returnPath, `Identical comment within 30s — wait ${dup.retryAfterSec}s.`);
   const post = await db.post.findUniqueOrThrow({
     where: { id: postId },
     include: { group: { select: { id: true, slug: true } }, author: { select: { id: true } } },
@@ -585,6 +600,15 @@ export async function startDm(form: FormData) {
   if (!otherId || otherId === userId) withError("/me/messages", "Choose someone to message.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) withError("/me/messages", "That user could not be found.");
+  const blocked = await db.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: userId, blockedId: otherId, kind: UserBlockKind.BLOCK },
+        { blockerId: otherId, blockedId: userId, kind: UserBlockKind.BLOCK },
+      ],
+    },
+  });
+  if (blocked) withError(`/u/${otherId}`, "Messaging is blocked between these accounts.");
   const [userAId, userBId] = dmPair(userId, otherId);
   const thread = await db.dmThread.upsert({
     where: { userAId_userBId: { userAId, userBId } },
@@ -600,9 +624,22 @@ export async function sendDm(form: FormData) {
   const body = value(form, "body");
   if (!body || body.length > 2000)
     withError(`/me/messages/${threadId}`, "Messages must be between 1 and 2,000 characters.");
+  const flood = assertNotFlooding(`dm:${userId}`, { limit: 30, windowMs: 60_000 });
+  if (!flood.ok)
+    withError(`/me/messages/${threadId}`, `Sending too fast — try again in ${flood.retryAfterSec}s.`);
   const thread = await db.dmThread.findUniqueOrThrow({ where: { id: threadId } });
   if (thread.userAId !== userId && thread.userBId !== userId)
     withError("/me/messages", "You are not part of this conversation.");
+  const otherId = thread.userAId === userId ? thread.userBId : thread.userAId;
+  const blocked = await db.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: userId, blockedId: otherId, kind: UserBlockKind.BLOCK },
+        { blockerId: otherId, blockedId: userId, kind: UserBlockKind.BLOCK },
+      ],
+    },
+  });
+  if (blocked) withError(`/me/messages/${threadId}`, "Messaging is blocked between these accounts.");
   await db.dmMessage.create({ data: { threadId, senderId: userId, body } });
   await db.dmThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
   const recipientId = thread.userAId === userId ? thread.userBId : thread.userAId;
@@ -809,6 +846,11 @@ export async function saveBrandSpot(form: FormData) {
   const body = value(form, "body");
   const href = value(form, "href");
   const active = value(form, "active") === "1";
+  if (title.length > 120) withError("/admin", "Partner title must be 120 characters or fewer.");
+  if (body && body.length > 500) withError("/admin", "Partner body must be 500 characters or fewer.");
+  if (href && href.length > 500) withError("/admin", "Partner link must be 500 characters or fewer.");
+  if (href && !(href.startsWith("/") || href.startsWith("http://") || href.startsWith("https://")))
+    withError("/admin", "Partner link must start with / or http(s).");
   const existing = await db.brandSpot.findFirst({ orderBy: { updatedAt: "desc" } });
   if (existing) {
     await db.brandSpot.update({
@@ -876,4 +918,38 @@ export async function togglePostHidden(form: FormData) {
 /** Alias for promote/demote UI. */
 export async function setMembershipRole(form: FormData) {
   return setMemberRole(form);
+}
+
+
+/** Mute (hide from feed) or block (also stop DMs). Stub — no hard delete of history. */
+export async function setUserBlock(form: FormData) {
+  const userId = await requireUser();
+  const targetId = value(form, "userId");
+  const kindRaw = value(form, "kind").toUpperCase();
+  const returnPath = value(form, "returnPath") || `/u/${targetId}`;
+  if (!targetId || targetId === userId) withError(returnPath, "Choose someone else to mute or block.");
+  const kind = kindRaw === "BLOCK" ? UserBlockKind.BLOCK : UserBlockKind.MUTE;
+  const target = await db.user.findUnique({ where: { id: targetId } });
+  if (!target) withError(returnPath, "That user could not be found.");
+  await db.userBlock.upsert({
+    where: { blockerId_blockedId: { blockerId: userId, blockedId: targetId } },
+    update: { kind },
+    create: { blockerId: userId, blockedId: targetId, kind },
+  });
+  revalidatePath(returnPath);
+  revalidatePath("/feed");
+  revalidatePath("/me/messages");
+  revalidatePath(`/u/${targetId}`);
+}
+
+export async function clearUserBlock(form: FormData) {
+  const userId = await requireUser();
+  const targetId = value(form, "userId");
+  const returnPath = value(form, "returnPath") || `/u/${targetId}`;
+  if (!targetId) withError(returnPath, "Missing user.");
+  await db.userBlock.deleteMany({ where: { blockerId: userId, blockedId: targetId } });
+  revalidatePath(returnPath);
+  revalidatePath("/feed");
+  revalidatePath("/me/messages");
+  revalidatePath(`/u/${targetId}`);
 }
