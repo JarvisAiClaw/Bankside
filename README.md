@@ -2,7 +2,7 @@
 
 Bankside is a free-forever social home for UK anglers and fisheries. It combines interest groups and a shared feed with lightweight venue community management. It deliberately does **not** include booking or payments.
 
-See `PRODUCT.md` for full scope (done vs later). Design baseline in `DESIGN.md` is **LOCKED** (Pepper PASS 6 Sep 2026) — extend, don’t reinvent.
+See `PROJECT.md` for the full product story; `PRODUCT.md` for full scope (done vs later). Design baseline in `DESIGN.md` is **LOCKED** (Pepper PASS 6 Sep 2026) — extend, don’t reinvent.
 
 ## Requirements
 
