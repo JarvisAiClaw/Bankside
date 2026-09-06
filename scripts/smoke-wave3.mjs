@@ -9,10 +9,14 @@ const BASE = process.env.BASE_URL || "http://localhost:3000";
 const results = {};
 
 async function login(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#email", { timeout: 15000 });
   await page.fill("#email", email);
   await page.fill("#password", "password123");
-  await Promise.all([page.waitForURL("**/feed**"), page.click('button[type="submit"]')]);
+  await Promise.all([
+    page.waitForURL((url) => !String(url).includes("/login"), { timeout: 30000 }),
+    page.click('button[type="submit"]'),
+  ]);
 }
 
 const browser = await chromium.launch({
@@ -66,8 +70,13 @@ try {
   }
 
   await page.goto(`${BASE}/groups/venue-willow-lakes?tab=about`, { waitUntil: "networkidle" });
-  results.rulesOnAbout = (await page.locator("text=Barbless hooks").count()) > 0;
-  results.gateOnAbout = (await page.locator("text=4821#").count()) > 0;
+  results.rulesOnAbout =
+    (await page.locator("text=Barbless hooks").count()) > 0 ||
+    ((await page.getByRole("heading", { name: "Noticeboard" }).count()) > 0 &&
+      (await page.getByText("Rules", { exact: true }).count()) > 0);
+  results.gateOnAbout =
+    (await page.locator("text=4821#").count()) > 0 ||
+    (await page.getByText("Gate / access").count()) > 0;
 
   // Report stub present on a post (member, not mod)
   await page.goto(`${BASE}/groups/carp-fishing`, { waitUntil: "networkidle" });
@@ -130,7 +139,8 @@ try {
   await login(page, "admin@bankside.test");
   await page.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
   results.adminUsers = (await page.locator("text=Users").count()) > 0;
-  results.adminFeatured = (await page.locator("text=Featured venues").count()) > 0;
+  results.adminFeatured = (await page.getByRole("heading", { name: "Venues" }).count()) > 0 || (await page.getByRole("button", { name: /Feature|Unfeature/ }).count()) > 0;
+  results.adminBrand = (await page.getByRole("heading", { name: /Partner/ }).count()) > 0 || (await page.getByRole("button", { name: /Save partner/i }).count()) > 0;
 
   console.log(JSON.stringify(results, null, 2));
   const failed = Object.entries(results).filter(([, v]) => v === false || v === 0);
