@@ -13,6 +13,8 @@ Custom peg mark + wordmark, photographic covers, media-first feed, single “Rea
 
 Pepper QA’s new surfaces against this file. Flag Jarvis if build drifts.
 
+**North star (Chris, locked):** multi-week fully functioning free social + venue management for the world — not a design expedition. Design baseline stays locked; **product completeness is the scoreboard.** No booking. No club SaaS. Free forever for clubs/anglers; monetise elsewhere.
+
 ---
 
 ## 0. Verdict on what exists
