@@ -1,15 +1,140 @@
 import { notFound } from "next/navigation";
-import { MembershipRole, Role } from "@prisma/client";
+import { MembershipRole, Role } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
-import { createPost, joinGroup, leaveGroup } from "@/app/actions";
-import { Notice, PostCard } from "@/components/ui";
-export default async function GroupPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ error?: string }> }) {
-  const { slug } = await params, { error } = await searchParams, user = await getCurrentUser();
-  const group = await db.group.findUnique({ where: { slug }, include: { venue: true, memberships: { include: { user: { select: { id: true, name: true, role: true } } }, orderBy: { joinedAt: "asc" } }, posts: { include: { author: { select: { name: true } } }, orderBy: [{ pinned: "desc" }, { createdAt: "desc" }] } } });
-  if (!group) notFound(); const membership = group.memberships.find(m => m.userId === user?.id); const canModerate = user?.role === Role.ADMIN || (!!membership && membership.role !== MembershipRole.MEMBER);
-  return <div className="shell py-10"><Notice message={error}/><div className="grid gap-8 lg:grid-cols-[1fr_320px]"><div><section className="card mb-6"><div className="flex flex-wrap items-start justify-between gap-5"><div><span className="text-xs font-bold uppercase tracking-wider text-brand">{group.type === "VENUE" ? "Official venue group" : "Community"}</span><h1 className="mt-2 text-4xl font-black">{group.name}</h1>{group.venue ? <p className="mt-1 font-medium text-black/50">{group.venue.location}</p> : null}<p className="mt-4 max-w-2xl leading-7 text-black/65">{group.description}</p></div>{user ? membership ? <form action={leaveGroup}><input type="hidden" name="groupId" value={group.id}/><input type="hidden" name="slug" value={slug}/><button className="btn-secondary" disabled={membership.role !== MembershipRole.MEMBER}>{membership.role === MembershipRole.MEMBER ? "Leave group" : "Group admin"}</button></form> : <form action={joinGroup}><input type="hidden" name="groupId" value={group.id}/><input type="hidden" name="slug" value={slug}/><button className="btn">Join group</button></form> : <a href="/login" className="btn">Log in to join</a>}</div></section>
-      {membership ? <form action={createPost} className="card mb-6"><input type="hidden" name="groupId" value={group.id}/><input type="hidden" name="slug" value={slug}/><label className="label" htmlFor="body">Share with the group</label><textarea className="field min-h-28 resize-y" id="body" name="body" maxLength={2000} required placeholder="What’s happening at the water?"/><div className="mt-3 flex items-center justify-between">{canModerate ? <label className="text-sm"><input type="checkbox" name="official" className="mr-2 accent-brand"/>Official update</label> : <span/>}<button className="btn">Post update</button></div></form> : null}
-      <div className="space-y-4">{group.posts.length ? group.posts.map(p => <PostCard key={p.id} post={p} slug={slug} canModerate={canModerate}/>) : <div className="card text-center text-black/50">No posts yet. Be the first to share.</div>}</div></div>
-      <aside><div className="card lg:sticky lg:top-6"><h2 className="text-lg font-bold">Members · {group.memberships.length}</h2><div className="mt-4 space-y-3">{group.memberships.map(m => <div key={m.id} className="flex items-center justify-between border-b border-black/5 pb-3 last:border-0"><span className="font-medium">{m.user.name}</span>{m.role !== MembershipRole.MEMBER ? <span className="text-xs font-bold uppercase text-brand">{m.role.toLowerCase()}</span> : null}</div>)}</div></div></aside></div></div>;
+import { Notice, Badge, Avatar, EmptyState } from "@/components/ui";
+import { PostRow } from "@/components/PostRow";
+import { Composer } from "@/components/Composer";
+import { GroupHeader, type GroupTab } from "@/components/GroupHeader";
+
+export default async function GroupPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ error?: string; tab?: string }>;
+}) {
+  const { slug } = await params;
+  const { error, tab: tabParam } = await searchParams;
+  const activeTab: GroupTab =
+    tabParam === "about" || tabParam === "members" ? tabParam : "posts";
+
+  const user = await getCurrentUser();
+  const group = await db.group.findUnique({
+    where: { slug },
+    include: {
+      venue: true,
+      memberships: {
+        include: { user: { select: { id: true, name: true, role: true } } },
+        orderBy: { joinedAt: "asc" },
+      },
+      posts: {
+        include: {
+          author: { select: { name: true } },
+          comments: {
+            include: { author: { select: { name: true } } },
+            orderBy: { createdAt: "asc" },
+            take: 12,
+          },
+          reactions: { where: { type: "LIKE" }, select: { userId: true } },
+          _count: { select: { comments: true, reactions: true } },
+        },
+        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+      },
+    },
+  });
+  if (!group) notFound();
+
+  const membership = group.memberships.find((m) => m.userId === user?.id);
+  const canModerate =
+    user?.role === Role.ADMIN || (!!membership && membership.role !== MembershipRole.MEMBER);
+
+  return (
+    <div>
+      <div className="shell pt-4">
+        <Notice message={error} />
+      </div>
+      <GroupHeader
+        group={group}
+        memberCount={group.memberships.length}
+        user={user}
+        membership={membership}
+        activeTab={activeTab}
+      />
+
+      <div className="shell max-w-3xl py-4" role="tabpanel">
+        {activeTab === "posts" ? (
+          <div className="space-y-2">
+            {membership ? (
+              <div className="border border-border">
+                <Composer
+                  userName={user!.name}
+                  fixedGroup={{ id: group.id, slug }}
+                  canOfficial={canModerate}
+                />
+              </div>
+            ) : null}
+            {group.posts.length ? (
+              group.posts.map((p) => (
+                <PostRow
+                  key={p.id}
+                  post={{
+                    ...p,
+                    likeCount: p._count.reactions,
+                    likedByMe: user ? p.reactions.some((r) => r.userId === user.id) : false,
+                    comments: p.comments,
+                    commentCount: p._count.comments,
+                  }}
+                  slug={slug}
+                  canModerate={canModerate}
+                  canInteract={!!membership}
+                  returnPath={`/groups/${slug}`}
+                />
+              ))
+            ) : (
+              <EmptyState title="No posts yet" body="Be the first to share an update." />
+            )}
+          </div>
+        ) : null}
+
+        {activeTab === "about" ? (
+          <div className="border border-border bg-surface px-4 py-5">
+            <h2 className="text-title text-ink">About</h2>
+            <p className="mt-3 font-serif text-body text-ink">{group.description}</p>
+            {group.venue ? (
+              <div className="mt-5 border-t border-border pt-4">
+                <p className="text-ui font-semibold text-ink">Location</p>
+                <p className="mt-1 text-ui text-muted">{group.venue.location}</p>
+                {group.venue.description ? (
+                  <>
+                    <p className="mt-4 text-ui font-semibold text-ink">Venue notes</p>
+                    <p className="mt-1 font-serif text-body text-muted">{group.venue.description}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {activeTab === "members" ? (
+          <div className="overflow-hidden border border-border bg-surface">
+            <ul>
+              {group.memberships.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+                >
+                  <Avatar name={m.user.name} size={32} />
+                  <span className="flex-1 text-ui font-semibold text-ink">{m.user.name}</span>
+                  {m.role !== MembershipRole.MEMBER ? (
+                    <Badge variant="role">{m.role === "OWNER" ? "Owner" : "Moderator"}</Badge>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }

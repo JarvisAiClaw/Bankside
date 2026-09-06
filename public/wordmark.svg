@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 22" role="img" aria-label="Bankside">
+  <text x="0" y="15" fill="#0B0D0C" font-family="IBM Plex Sans, ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="700" letter-spacing="-0.035em">Bankside</text>
+  <path d="M0 20 H120" stroke="#0D4F3C" stroke-width="1.5"/>
+  <path d="M114 20 L122 20 L118 16.5 Z" fill="#D94E1F"/>
+</svg>

@@ -1,23 +1,32 @@
-# Bankside MVP - STATUS
+# Bankside STATUS
+Wave 1 product build 6 Sep 2026 (UTC+1) — **shipped**. Design baseline LOCKED (Pepper PASS). App on :3000 (next start).
 
-Path: /workspace/bankside (shared box; no Jarvis machine registered).
+**Handoff:** Wave 1 complete. Do not restyle. Wave 2 is for Grok Build (not this agent).
 
-## How to run
-1. Copy env example and set session secret.
-2. Start Postgres via compose or local.
-3. Install deps, migrate, seed, then run dev on :3000.
+## Versions
+- Next 16 / React 19 / Prisma 7 / Tailwind 4
 
-Box now: Postgres up, migrated, seeded; dev on :3000.
+## Wave 1 (shipped)
+- Image upload on posts (`public/uploads`) + Composer
+- Comments create + list
+- Like reactions (toggle + count)
+- Owner backend: edit about/cover, member list/remove, pin + official flags
+- Invite link regeneration (`/join/[token]`) — chosen over join-request queue
+- In-app notifications `/me/notifications`
+- Discover search by name
+- Seed demos + README + PRODUCT.md (done vs later)
 
-## Done
-- Next.js App Router, TypeScript, Tailwind, Prisma, Postgres
-- Auth roles; venues auto-group; globals; feed pin; members; discover; branding
-- Compose DB service; README; seed demos; production build OK
+## Craft baseline (earlier leaps, still in force)
+1. Custom peg/bank SVG mark + wordmark (`Logo.tsx`)
+2. Photographic covers + peg-grid empty cover
+3. Media-first demo posts + PostRow media
+4. Scroll-linked hero depth
+5. Sticky group tabs + dense feed
 
-## Demo logins
-See README for demo emails and shared demo pass.
+## Screenshots (fresh 6 Sep 2026)
+- preview-home.png, preview-feed.png, preview-group.png, preview-owner.png, preview-compose.png, preview-feed-mobile.png
 
-## Left
-- Booking, payments, DMs, uploads, comments, notifications
-- Full app image and VPS deploy configs
-- Jarvis machine missing; built on box path
+## Schema
+- Group.coverUrl, Group.inviteToken
+- Post.imageUrl
+- Comment, Reaction, Notification models

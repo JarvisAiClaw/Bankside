@@ -1,2 +1,84 @@
-import Link from "next/link"; import { redirect } from "next/navigation"; import { db } from "@/lib/db"; import { getCurrentUser } from "@/lib/current-user"; import { PostCard } from "@/components/ui";
-export default async function Feed() { const user = await getCurrentUser(); if (!user) redirect("/login"); const posts = await db.post.findMany({ where: { group: { memberships: { some: { userId: user.id } } } }, include: { author: { select: { name: true } }, group: { select: { name: true, slug: true } } }, orderBy: { createdAt: "desc" }, take: 50 }); return <div className="shell max-w-3xl py-12"><h1 className="text-4xl font-black">My feed</h1><p className="mt-2 text-black/60">Latest posts from your groups.</p><div className="mt-8 space-y-5">{posts.length ? posts.map(p => <div key={p.id}><Link href={`/groups/${p.group.slug}`} className="mb-2 inline-block text-sm font-bold text-brand">{p.group.name} →</Link><PostCard post={p} slug={p.group.slug}/></div>) : <div className="card text-center"><p className="text-black/60">Your feed is quiet. Join a group to get started.</p><Link href="/discover" className="btn mt-5">Discover groups</Link></div>}</div></div> }
+import { redirect } from "next/navigation";
+import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/current-user";
+import { PostRow } from "@/components/PostRow";
+import { Composer } from "@/components/Composer";
+import { EmptyState } from "@/components/ui";
+
+export const metadata = { title: "Feed" };
+
+export default async function Feed() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const [posts, memberships] = await Promise.all([
+    db.post.findMany({
+      where: { group: { memberships: { some: { userId: user.id } } } },
+      include: {
+        author: { select: { name: true } },
+        group: { select: { name: true, slug: true } },
+        comments: {
+          include: { author: { select: { name: true } } },
+          orderBy: { createdAt: "asc" },
+          take: 8,
+        },
+        reactions: { where: { type: "LIKE" }, select: { userId: true } },
+        _count: { select: { comments: true, reactions: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    db.membership.findMany({
+      where: { userId: user.id },
+      include: { group: { select: { id: true, slug: true, name: true } } },
+      orderBy: { joinedAt: "asc" },
+    }),
+  ]);
+
+  const groups = memberships.map((m) => m.group);
+
+  return (
+    <div className="feed-shell feed-dense py-3 md:py-5">
+      <div className="mb-2 px-4 md:px-0">
+        <h1 className="text-title text-ink">Feed</h1>
+        <p className="mt-0.5 text-ui text-muted">Latest from groups you have joined.</p>
+      </div>
+
+      {groups.length ? (
+        <div className="mb-1.5 border-y border-border md:border md:border-border">
+          <Composer userName={user.name} groups={groups} />
+        </div>
+      ) : null}
+
+      <div className="space-y-1.5">
+        {posts.length ? (
+          posts.map((p) => (
+            <PostRow
+              key={p.id}
+              post={{
+                ...p,
+                likeCount: p._count.reactions,
+                likedByMe: p.reactions.some((r) => r.userId === user.id),
+                comments: p.comments,
+                commentCount: p._count.comments,
+              }}
+              slug={p.group.slug}
+              showGroup
+              canInteract
+              returnPath="/feed"
+            />
+          ))
+        ) : (
+          <div className="px-4 md:px-0">
+            <EmptyState
+              title="Your feed is quiet"
+              body="Join a group to see posts here."
+              actionHref="/discover"
+              actionLabel="Browse groups"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

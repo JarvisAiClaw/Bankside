@@ -1,22 +1,90 @@
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
-import { togglePin } from "@/app/actions";
+import { initials } from "@/lib/utils";
 
 export function Notice({ message, tone = "error" }: { message?: string; tone?: "error" | "success" }) {
   if (!message) return null;
-  return <div className={`mb-5 rounded-xl px-4 py-3 text-sm ${tone === "error" ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>{message}</div>;
+  return (
+    <div
+      role="alert"
+      className={`mb-4 flex gap-2 border px-3 py-2.5 text-ui ${
+        tone === "error"
+          ? "border-danger/40 bg-red-50 text-danger"
+          : "border-success/40 bg-brand-subtle text-ink"
+      }`}
+    >
+      <span aria-hidden="true">{tone === "error" ? "!" : "✓"}</span>
+      <span>{message}</span>
+    </div>
+  );
 }
-export function GroupCard({ group }: { group: { slug: string; name: string; description: string; type: string; _count: { memberships: number; posts: number }; venue?: { location: string } | null } }) {
-  return <Link href={`/groups/${group.slug}`} className="card group block hover:-translate-y-0.5 hover:border-brand/40">
-    <div className="mb-4 flex items-center justify-between"><span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-brand">{group.type === "VENUE" ? "Venue" : "Community"}</span><span className="text-sm text-black/50">{group._count.memberships} members</span></div>
-    <h3 className="text-xl font-bold group-hover:text-brand">{group.name}</h3>{group.venue ? <p className="mt-1 text-sm font-medium text-black/50">{group.venue.location}</p> : null}
-    <p className="mt-2 line-clamp-2 text-black/65">{group.description}</p><p className="mt-4 text-sm font-semibold">{group._count.posts} posts →</p>
-  </Link>;
+
+const AVATAR_PALETTE = [
+  "#0D4F3C",
+  "#1B4F72",
+  "#0F6B45",
+  "#5C4A32",
+  "#3E4742",
+  "#1E5A4A",
+  "#4A3728",
+  "#245C6E",
+] as const;
+
+function avatarColour(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
 }
-export function PostCard({ post, canModerate = false, slug }: { post: { id: string; body: string; pinned: boolean; official: boolean; createdAt: Date; author: { name: string } }; canModerate?: boolean; slug: string }) {
-  return <article className={`card ${post.pinned ? "border-brand/40 bg-emerald-50/40" : ""}`}>
-    <div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><strong>{post.author.name}</strong>{post.official ? <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">OFFICIAL</span> : null}{post.pinned ? <span className="text-xs font-bold text-brand">PINNED</span> : null}</div><time className="text-xs text-black/45">{formatDate(post.createdAt)}</time></div>
-    {canModerate ? <form action={togglePin}><input type="hidden" name="postId" value={post.id}/><input type="hidden" name="slug" value={slug}/><button className="text-xs font-semibold text-brand hover:underline">{post.pinned ? "Unpin" : "Pin"}</button></form> : null}</div>
-    <p className="mt-4 whitespace-pre-wrap leading-7 text-black/75">{post.body}</p>
-  </article>;
+
+export function Avatar({ name, size = 40 }: { name: string; size?: 32 | 40 | 72 }) {
+  const dim = size === 32 ? "h-8 w-8 text-meta" : size === 72 ? "h-[72px] w-[72px] text-title" : "h-10 w-10 text-ui";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ${dim}`}
+      style={{ backgroundColor: avatarColour(name) }}
+      aria-hidden="true"
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+export function Badge({
+  variant,
+  children,
+}: {
+  variant: "official" | "pinned" | "community" | "venue" | "role";
+  children: React.ReactNode;
+}) {
+  const styles = {
+    official: "bg-signal text-white",
+    pinned: "bg-signal-subtle text-signal border border-signal/30",
+    community: "bg-brand-subtle text-brand border border-brand/20",
+    venue: "bg-brand text-white",
+    role: "bg-brand-subtle text-brand",
+  }[variant];
+  return <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-meta font-semibold ${styles}`}>{children}</span>;
+}
+
+export function EmptyState({
+  title,
+  body,
+  actionHref,
+  actionLabel,
+}: {
+  title: string;
+  body: string;
+  actionHref?: string;
+  actionLabel?: string;
+}) {
+  return (
+    <div className="panel px-4 py-5">
+      <p className="text-title text-ink">{title}</p>
+      <p className="mt-1 text-ui text-muted">{body}</p>
+      {actionHref && actionLabel ? (
+        <Link href={actionHref} className="btn mt-4">
+          {actionLabel}
+        </Link>
+      ) : null}
+    </div>
+  );
 }

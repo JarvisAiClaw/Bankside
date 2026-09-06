@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // url moved to prisma.config.ts
 }
 
 enum Role {
@@ -24,63 +25,115 @@ enum MembershipRole {
   OWNER
 }
 
+enum NotificationType {
+  COMMENT
+  MEMBER_JOIN
+}
+
 model User {
-  id String @id @default(cuid())
-  name String
-  email String @unique
-  passwordHash String
-  role Role @default(ANGLER)
-  createdAt DateTime @default(now())
-  venues Venue[]
-  memberships Membership[]
-  posts Post[]
+  id             String         @id @default(cuid())
+  name           String
+  email          String         @unique
+  passwordHash   String
+  role           Role           @default(ANGLER)
+  createdAt      DateTime       @default(now())
+  venues         Venue[]
+  memberships    Membership[]
+  posts          Post[]
+  comments       Comment[]
+  reactions      Reaction[]
+  notifications  Notification[] @relation("NotificationRecipient")
+  actedNotices   Notification[] @relation("NotificationActor")
 }
 
 model Venue {
-  id String @id @default(cuid())
-  name String
-  slug String @unique
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
   description String
-  location String
-  ownerId String
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  group Group?
-  createdAt DateTime @default(now())
+  location    String
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  group       Group?
+  createdAt   DateTime @default(now())
 }
 
 model Group {
-  id String @id @default(cuid())
-  name String
-  slug String @unique
-  description String
-  type GroupType @default(GLOBAL)
-  venueId String? @unique
-  venue Venue? @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  memberships Membership[]
-  posts Post[]
-  createdAt DateTime @default(now())
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  description  String
+  type         GroupType    @default(GLOBAL)
+  coverUrl     String?
+  inviteToken  String?      @unique
+  venueId      String?      @unique
+  venue        Venue?       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+  posts        Post[]
+  createdAt    DateTime     @default(now())
 }
 
 model Membership {
-  id String @id @default(cuid())
-  userId String
-  groupId String
-  role MembershipRole @default(MEMBER)
-  joinedAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id       String         @id @default(cuid())
+  userId   String
+  groupId  String
+  role     MembershipRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group    Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
   @@unique([userId, groupId])
 }
 
 model Post {
-  id String @id @default(cuid())
-  body String @db.Text
-  official Boolean @default(false)
-  pinned Boolean @default(false)
-  authorId String
-  groupId String
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id        String     @id @default(cuid())
+  body      String     @db.Text
+  imageUrl  String?
+  official  Boolean    @default(false)
+  pinned    Boolean    @default(false)
+  authorId  String
+  groupId   String
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  reactions Reaction[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String   @db.Text
+  postId    String
+  authorId  String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  type      String   @default("LIKE")
+  postId    String
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId, type])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  message   String
+  link      String?
+  read      Boolean          @default(false)
+  actorId   String?
+  postId    String?
+  groupId   String?
+  user      User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt DateTime         @default(now())
 }

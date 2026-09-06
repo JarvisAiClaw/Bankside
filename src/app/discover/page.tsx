@@ -1,3 +1,113 @@
-import { db } from "@/lib/db"; import { GroupCard } from "@/components/ui";
-export const metadata = { title: "Discover" };
-export default async function Discover() { const groups = await db.group.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }], include: { venue: { select: { location: true } }, _count: { select: { memberships: true, posts: true } } } }); return <div className="shell py-12"><p className="text-sm font-bold uppercase tracking-wider text-brand">Discover</p><h1 className="mt-2 text-4xl font-black">Find your next group</h1><p className="mt-3 max-w-2xl text-black/60">Talk tactics in global communities or follow a fishery for official bankside updates.</p><div className="mt-9 grid gap-5 md:grid-cols-2 lg:grid-cols-3">{groups.map(g => <GroupCard key={g.id} group={g}/>)}</div></div> }
+import Link from "next/link";
+import { db } from "@/lib/db";
+import { GroupRow } from "@/components/GroupRow";
+
+export const metadata = { title: "Groups" };
+
+export default async function Discover({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string; q?: string }>;
+}) {
+  const { filter, q } = await searchParams;
+  const active = filter === "communities" || filter === "venues" ? filter : "all";
+  const query = (q || "").trim();
+
+  const groups = await db.group.findMany({
+    where: {
+      AND: [
+        active === "communities"
+          ? { type: "GLOBAL" }
+          : active === "venues"
+            ? { type: "VENUE" }
+            : {},
+        query
+          ? { name: { contains: query, mode: "insensitive" } }
+          : {},
+      ],
+    },
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+    include: {
+      venue: { select: { location: true } },
+      _count: { select: { memberships: true, posts: true } },
+    },
+  });
+
+  const filters = [
+    { id: "all", label: "All", href: query ? `/discover?q=${encodeURIComponent(query)}` : "/discover" },
+    {
+      id: "communities",
+      label: "Communities",
+      href: `/discover?filter=communities${query ? `&q=${encodeURIComponent(query)}` : ""}`,
+    },
+    {
+      id: "venues",
+      label: "Venues",
+      href: `/discover?filter=venues${query ? `&q=${encodeURIComponent(query)}` : ""}`,
+    },
+  ] as const;
+
+  return (
+    <div className="shell max-w-3xl py-6 md:py-8">
+      <h1 className="text-title text-ink">Groups</h1>
+      <p className="mt-1 text-ui text-muted">
+        Interest communities and fishery pages — join for feed updates.
+      </p>
+
+      <form method="get" className="mt-4 flex flex-wrap gap-2" role="search">
+        {active !== "all" ? <input type="hidden" name="filter" value={active} /> : null}
+        <label className="sr-only" htmlFor="group-search">
+          Search groups by name
+        </label>
+        <input
+          id="group-search"
+          name="q"
+          type="search"
+          defaultValue={query}
+          placeholder="Search by name…"
+          className="field min-w-[12rem] flex-1"
+        />
+        <button type="submit" className="btn">
+          Search
+        </button>
+        {query ? (
+          <Link href={active === "all" ? "/discover" : `/discover?filter=${active}`} className="btn-secondary">
+            Clear
+          </Link>
+        ) : null}
+      </form>
+
+      <div
+        className="mt-4 inline-flex rounded-md border border-border bg-surface p-0.5"
+        role="group"
+        aria-label="Filter groups"
+      >
+        {filters.map((f) => {
+          const isActive = active === f.id;
+          return (
+            <Link
+              key={f.id}
+              href={f.href}
+              aria-current={isActive ? "page" : undefined}
+              className={`min-h-10 rounded-[5px] px-3 py-2 text-ui font-semibold transition-colors duration-150 ${
+                isActive ? "bg-brand text-white" : "text-muted hover:text-ink"
+              }`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 overflow-hidden border border-border">
+        {groups.length ? (
+          groups.map((g) => <GroupRow key={g.id} group={g} />)
+        ) : (
+          <p className="bg-surface px-4 py-5 text-ui text-muted">
+            {query ? `No groups match “${query}”.` : "No groups in this filter."}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

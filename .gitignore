@@ -3,3 +3,13 @@ node_modules
 .env
 *.log
 prisma/dev.db
+src/generated
+.codex-prompt.txt
+codex-upgrade-result.txt
+prisma/schema.prisma.bak
+
+# user uploads (keep demo catch-*.jpg)
+public/uploads/*
+!public/uploads/catch-*.jpg
+!public/uploads/.gitkeep
+public/covers/user-*

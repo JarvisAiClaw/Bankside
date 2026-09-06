@@ -1,9 +1,107 @@
 import Link from "next/link";
+import Image from "next/image";
+import { redirect } from "next/navigation";
 import { branding } from "@/lib/branding";
 import { db } from "@/lib/db";
-import { GroupCard } from "@/components/ui";
+import { getCurrentUser } from "@/lib/current-user";
+import { PostRow } from "@/components/PostRow";
+import { HeroParallax } from "@/components/HeroParallax";
+import { pluralize } from "@/lib/utils";
+
 export default async function Home() {
-  const groups = await db.group.findMany({ take: 3, orderBy: { memberships: { _count: "desc" } }, include: { venue: { select: { location: true } }, _count: { select: { memberships: true, posts: true } } } });
-  return <><section className="overflow-hidden bg-ink text-white"><div className="shell grid gap-10 py-20 md:grid-cols-[1.2fr_.8fr] md:py-28"><div><p className="mb-5 text-sm font-bold uppercase tracking-[.2em] text-emerald-300">The social home of UK angling</p><h1 className="max-w-3xl text-5xl font-black leading-[1.05] sm:text-7xl">More time fishing. Better company.</h1><p className="mt-6 max-w-xl text-lg leading-8 text-white/70">{branding.tagline} Join anglers and fisheries, swap knowledge, follow official venue updates and share what’s happening at the water.</p><div className="mt-8 flex flex-wrap gap-3"><Link className="btn !bg-white !text-ink" href="/register">Join free forever</Link><Link className="btn-secondary !border-white/25 !bg-transparent !text-white" href="/discover">Explore groups</Link></div></div><div className="hidden place-items-center md:grid"><div className="aspect-square w-full max-w-sm rounded-full border border-white/10 bg-[radial-gradient(circle_at_30%_30%,#35a97d,#176b4d_45%,#0b3528)] p-12"><div className="flex h-full items-center justify-center rounded-full border border-white/20 text-center text-2xl font-black">NO FEES<br/>NO BOOKING<br/>JUST FISHING</div></div></div></div></section>
-  <section className="shell py-16"><div className="mb-8 flex items-end justify-between"><div><p className="text-sm font-bold uppercase tracking-wider text-brand">Find your people</p><h2 className="mt-2 text-3xl font-black">Groups worth joining</h2></div><Link href="/discover" className="font-semibold text-brand">See all →</Link></div><div className="grid gap-5 md:grid-cols-3">{groups.map(g => <GroupCard key={g.id} group={g}/>)}</div></section></>;
+  const user = await getCurrentUser();
+  if (user) redirect("/feed");
+
+  const [groups, posts] = await Promise.all([
+    db.group.findMany({
+      take: 6,
+      orderBy: { memberships: { _count: "desc" } },
+      include: {
+        venue: { select: { location: true } },
+        _count: { select: { memberships: true, posts: true } },
+      },
+    }),
+    db.post.findMany({
+      take: 5,
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: { select: { name: true } },
+        group: { select: { name: true, slug: true } },
+      },
+    }),
+  ]);
+
+  return (
+    <>
+      <HeroParallax>
+        <div className="hero-parallax-media absolute inset-0 scale-110">
+          <Image
+            src="/hero.jpg"
+            alt=""
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/45 to-ink/25" aria-hidden="true" />
+        <div className="shell relative flex min-h-[320px] flex-col justify-end py-10 sm:min-h-[400px] sm:py-14">
+          <h1 className="max-w-xl text-display text-white">UK angling groups, free forever</h1>
+          <p className="mt-3 max-w-lg text-ui text-white/85">{branding.tagline}</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link className="btn !bg-white !text-ink hover:!bg-canvas" href="/register">
+              Join free
+            </Link>
+            <Link className="btn-secondary !border-white/40 !bg-transparent !text-white hover:!bg-white/10" href="/discover">
+              Browse groups
+            </Link>
+          </div>
+        </div>
+      </HeroParallax>
+
+      <section className="shell py-8">
+        <h2 className="section-label">Happening on Bankside</h2>
+        <div className="mt-3 feed-shell feed-dense space-y-2">
+          {posts.length ? (
+            posts.map((p) => (
+              <PostRow key={p.id} post={p} slug={p.group.slug} showGroup />
+            ))
+          ) : (
+            <div className="panel px-4 py-4 text-ui text-muted">No public posts yet — browse groups to get started.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="shell pb-10">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="section-label">Groups</h2>
+          <Link href="/discover" className="text-ui font-semibold text-brand hover:underline">
+            See all
+          </Link>
+        </div>
+        <ul className="flex gap-2 overflow-x-auto pb-1">
+          {groups.map((g) => (
+            <li key={g.id} className="shrink-0">
+              <Link
+                href={`/groups/${g.slug}`}
+                className="flex min-w-[200px] items-center gap-3 border border-border bg-surface px-3 py-3 transition-colors hover:bg-brand-subtle/50"
+              >
+                <span
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-ui font-semibold text-white"
+                  style={{ backgroundColor: "#0D4F3C" }}
+                  aria-hidden="true"
+                >
+                  {g.name.slice(0, 1)}
+                </span>
+                <span>
+                  <span className="block text-ui font-semibold text-ink">{g.name}</span>
+                  <span className="text-meta text-muted">{pluralize(g._count.memberships, "member")}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </>
+  );
 }
