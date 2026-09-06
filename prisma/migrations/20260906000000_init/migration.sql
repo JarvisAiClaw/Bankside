@@ -1,0 +1,44 @@
+CREATE TYPE "Role" AS ENUM ('ANGLER', 'VENUE_OWNER', 'ADMIN');
+CREATE TYPE "GroupType" AS ENUM ('GLOBAL', 'VENUE');
+CREATE TYPE "MembershipRole" AS ENUM ('MEMBER', 'MODERATOR', 'OWNER');
+
+CREATE TABLE "User" (
+  "id" TEXT NOT NULL, "name" TEXT NOT NULL, "email" TEXT NOT NULL,
+  "passwordHash" TEXT NOT NULL, "role" "Role" NOT NULL DEFAULT 'ANGLER',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "Venue" (
+  "id" TEXT NOT NULL, "name" TEXT NOT NULL, "slug" TEXT NOT NULL,
+  "description" TEXT NOT NULL, "location" TEXT NOT NULL, "ownerId" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Venue_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "Group" (
+  "id" TEXT NOT NULL, "name" TEXT NOT NULL, "slug" TEXT NOT NULL,
+  "description" TEXT NOT NULL, "type" "GroupType" NOT NULL DEFAULT 'GLOBAL', "venueId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Group_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "Membership" (
+  "id" TEXT NOT NULL, "userId" TEXT NOT NULL, "groupId" TEXT NOT NULL,
+  "role" "MembershipRole" NOT NULL DEFAULT 'MEMBER', "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Membership_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "Post" (
+  "id" TEXT NOT NULL, "body" TEXT NOT NULL, "official" BOOLEAN NOT NULL DEFAULT false,
+  "pinned" BOOLEAN NOT NULL DEFAULT false, "authorId" TEXT NOT NULL, "groupId" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "Post_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX "Venue_slug_key" ON "Venue"("slug");
+CREATE UNIQUE INDEX "Group_slug_key" ON "Group"("slug");
+CREATE UNIQUE INDEX "Group_venueId_key" ON "Group"("venueId");
+CREATE UNIQUE INDEX "Membership_userId_groupId_key" ON "Membership"("userId", "groupId");
+ALTER TABLE "Venue" ADD CONSTRAINT "Venue_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Group" ADD CONSTRAINT "Group_venueId_fkey" FOREIGN KEY ("venueId") REFERENCES "Venue"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Membership" ADD CONSTRAINT "Membership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Membership" ADD CONSTRAINT "Membership_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Post" ADD CONSTRAINT "Post_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Post" ADD CONSTRAINT "Post_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ANGLER
+  VENUE_OWNER
+  ADMIN
+}
+
+enum GroupType {
+  GLOBAL
+  VENUE
+}
+
+enum MembershipRole {
+  MEMBER
+  MODERATOR
+  OWNER
+}
+
+model User {
+  id String @id @default(cuid())
+  name String
+  email String @unique
+  passwordHash String
+  role Role @default(ANGLER)
+  createdAt DateTime @default(now())
+  venues Venue[]
+  memberships Membership[]
+  posts Post[]
+}
+
+model Venue {
+  id String @id @default(cuid())
+  name String
+  slug String @unique
+  description String
+  location String
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  group Group?
+  createdAt DateTime @default(now())
+}
+
+model Group {
+  id String @id @default(cuid())
+  name String
+  slug String @unique
+  description String
+  type GroupType @default(GLOBAL)
+  venueId String? @unique
+  venue Venue? @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+  posts Post[]
+  createdAt DateTime @default(now())
+}
+
+model Membership {
+  id String @id @default(cuid())
+  userId String
+  groupId String
+  role MembershipRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  @@unique([userId, groupId])
+}
+
+model Post {
+  id String @id @default(cuid())
+  body String @db.Text
+  official Boolean @default(false)
+  pinned Boolean @default(false)
+  authorId String
+  groupId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

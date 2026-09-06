@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bankside
+      POSTGRES_PASSWORD: bankside
+      POSTGRES_DB: bankside
+    ports: ["5432:5432"]
+    volumes: [bankside_postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bankside"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  bankside_postgres:
